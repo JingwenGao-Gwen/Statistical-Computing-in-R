@@ -1,0 +1,228 @@
+---
+title: "Exercise7"
+author: "Jingwen GAO"
+date: "2025-09-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy=T,warning=F,message=F)
+```
+# scatterplot smoothing
+
+```{r}
+library(ggplot2)
+library(NHANES)
+library(tidyverse)
+new <- NHANES |> filter(SurveyYr=="2011_12" & MaritalStatus=="Married" & Age>20 & Age<65 & Race1=="Black") 
+```
+
+
+## linear parametric
+```{r}
+new |> 
+  ggplot(aes(x=Age, y=BPSysAve)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+```
+
+## Tukey resistant line
+
+Outliers, while sometimes interesting, can distort results in ways that obscure the broader patterns. To address this, we need fitting tools that reduce or eliminate the undue influence of such outliers. **Tukey’s resistant line** and the bisquare robust estimation are alternatives to traditional regression techniques.
+
+The idea is simple in concept. It involves dividing the dataset into three approximately equal groups of values and summarizing these groups by computing their respective medians. The median values of each batch are then used to compute the slope and intercept. The motivation behind this plot is to use the three-point summary to provide a robust assessment of the type of relationship between both variables.
+
+Tukey’s resistant line can be computed using the R built-in line() function. The maximum number of iterations is set with the iter argument. Usually, five iterations will be enough.
+
+Each iteration refines the slope by fitting a resistant line to the residuals of the previous fit. This process continues until the residuals stabilize, yielding a final line that is minimally influenced by outliers.
+
+Three iterations were required to stabilize the residuals, giving us the final fitted line whose intercept and slope are very close to the actual relationship between the two variables.
+
+```{r}
+#fit
+tukey <- line(new$Age,new$BPSysAve, iter = 5)
+tukey
+```
+
+If `iter=1`-> tukey median-median line
+```{r}
+tukey_median<-line(new$Age,new$BPSysAve,iter=1)
+tukey_median
+```
+
+```{r}
+#plot
+new |> 
+  ggplot(aes(x=Age, y=BPSysAve)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F) +
+  geom_abline(intercept = tukey$coefficients[1], 
+              slope = tukey$coefficients[2],
+              col = "red")+
+  geom_abline(intercept = tukey_median$coefficients[1], 
+              slope = tukey_median$coefficients[2],
+              col = "green",
+              alpha=0.5)
+
+```
+
+
+## using local polynomial regression as a smoother
+```{r}
+new |> 
+  ggplot(aes(x=Age, y=BPSysAve)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F) +
+  geom_smooth(method="loess",span=.6,se=F,col="darkgreen")
+```
+
+#putting the smoothers together
+```{r}
+new |> 
+  ggplot(aes(x=Age, y=BPSysAve)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F) +
+  geom_smooth(method="loess",span=.6,se=F,col="darkgreen") +
+  geom_abline(intercept = tukey$coefficients[1], 
+              slope = tukey$coefficients[2],
+              col = "red")
+```
+
+
+              
+# RSEs from various smoother fits
+
+`RSE` refers to Residual Standard Error, calculate the dispersion of residual error after regression.
+
+## OLS
+```{r}
+library(NHANES)
+dat<-NHANES |> filter(SurveyYr=="2009_10" & Gender=="female" & Age>64)
+
+linear<-lm(BPSysAve~Weight,dat)
+
+summary(linear)
+
+summary(lm(BPSysAve~Weight,dat))$sigma # return RSE
+```
+Note: 357=381(`nrow(dat)`)-2-22
+
+## tukey resistant
+```{r}
+line(dat$Weight,dat$BPSysAve, iter = 5)
+
+tukey_BMI.Weight <- line(dat$Weight,dat$BPSysAve, iter = 5)
+sqrt(sum(tukey_BMI.Weight$residuals^2)/(nrow(dat)-2))
+```
+## lowess
+```{r}
+loessline<-loess(BPSysAve~Weight,dat,span = .8,degree=2)$s
+loessline.2<-loess(BPSysAve~Weight,dat,span=.2,degree=2)$s
+loessline;loessline.2
+```
+`span` close to 1, smooth; close to 0, overfitting.
+
+In a loess object, `$s` represents the residual scale, which can be understood as a robust estimate of the residual standard deviation / residual standard error (RSE). It reflects the overall size of the residuals after fitting.
+
+`span = 0.8`: Each local fit uses a larger proportion of the data → the curve is smoother, with lower variance but potentially higher bias.
+
+`span = 0.2`: Each local fit uses a smaller neighborhood → the curve is more sensitive, better at capturing local fluctuations, but more likely to fit noise; the model’s “degrees of freedom” (enp) are higher.
+
+# Exercises
+
+In the Salaries dataset (car):
+
+1. Plot the relationship between years since PhD (x) and salary. 
+
+```{r}
+library(car)
+p<-ggplot(Salaries)+
+  geom_point(aes(x=yrs.since.phd,y=salary))
+```
+
+Smooth with linear regression line, Tukey resistant line, and loess line. 
+
+```{r}
+tukey<-line(Salaries$yrs.since.phd,Salaries$salary,iter=5)
+
+p+geom_smooth(aes(color="linear",
+                  x=yrs.since.phd,
+                  y=salary),
+              method = "lm",se=F)+
+  geom_smooth(aes(color="loess",x=yrs.since.phd,y=salary),
+              method="loess",se=F)+
+  geom_abline(aes(color="tukey",
+              intercept = tukey$coefficients[1],
+              slope = tukey$coefficients[2])
+              )
+```
+
+Play with loess smoothing parameter (bandwidth or span) to arrive at an optimal smooth. What do these show about the underlying relationship between predictor and outcome?
+
+```{r}
+p+geom_smooth(aes(color="loess.standard",x=yrs.since.phd,y=salary),
+              method="loess",se=F)+
+  geom_smooth(aes(color="loess.span=1",x=yrs.since.phd,y=salary),
+              method="loess",se=F,span=1)+
+  geom_smooth(aes(color="loess.span=.1",x=yrs.since.phd,y=salary),
+              method="loess",se=F,span=0.1)+
+  geom_smooth(aes(color="loess.span=.5",x=yrs.since.phd,y=salary),
+              method="loess",se=F,span=0.5)
+  
+```
+
+
+2. Examine RSEs from each model fit. What do they add to the graphical picture of the relationship?
+
+```{r}
+RSEs<-data.frame(
+  method=c("linear","loess","tukey"),
+  RSE=c(
+    summary(lm(salary~yrs.since.phd,Salaries))$sigma,
+    loess(salary~yrs.since.phd,Salaries,span=.5,degree=2)$s,
+    sqrt(sum(line(Salaries$yrs.since.phd,Salaries$salary,iter=5)$residuals^2)/(nrow(Salaries)-2)))
+  )
+RSEs
+```
+
+
+3. Do the analysis for the same relationship separately for men and women. Does the overall relationship change as you explore it in these subpopulations?
+```{r}
+p+geom_smooth(aes(color="linear",
+                  x=yrs.since.phd,
+                  y=salary),
+              method = "lm",se=F)+
+  geom_smooth(aes(color="loess",x=yrs.since.phd,y=salary),
+              method="loess",se=F)+
+  geom_abline(aes(color="tukey",
+              intercept = tukey$coefficients[1],
+              slope = tukey$coefficients[2])
+              )+
+  geom_smooth(aes(color="loess.span=1",x=yrs.since.phd,y=salary),
+              method="loess",se=F,span=1)+
+  geom_smooth(aes(color="loess.span=.1",x=yrs.since.phd,y=salary),
+              method="loess",se=F,span=0.1)+
+  geom_smooth(aes(color="loess.span=.5",x=yrs.since.phd,y=salary),
+              method="loess",se=F,span=0.5)+
+  facet_wrap(~sex)
+```
+
+
+# go-beyond
+
+how to put a legend on the plot showing the smoother type.
+
+```{r}
+new |>
+  ggplot(aes(x = Age, y = BPSysAve)) +
+  geom_point(show.legend = FALSE) +
+  geom_smooth(aes(color = "OLS (lm)"),
+              method = "lm", se = FALSE) +
+  geom_smooth(aes(color = "LOESS (span = 0.6)"),
+              method = "loess", span = .6, se = FALSE) +
+  geom_abline(aes(color = "Tukey resistant",intercept = tukey$coefficients[1],
+              slope     = tukey$coefficients[2])) +
+  labs(color="Smoother")
+
+```
+

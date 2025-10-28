@@ -1,0 +1,249 @@
+---
+title: "exercise3"
+author: "Jingwen GAO"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T,warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(scales)
+library(ggrepel)
+library(patchwork)
+```
+
+# Communicate through ggplot
+
+## labels
+
+```{r}
+#labels
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth(se = FALSE) +
+  labs(
+    x = "Engine displacement (L)",
+    y = "Highway fuel economy (mpg)",
+    color = "Car type",
+    title = "Fuel efficiency generally decreases with engine size",
+    subtitle = "Two seaters (sports cars) are an exception because of their light weight",
+    caption = "Data from fueleconomy.gov"
+  )
+```
+
+## annotations
+
+The difference between annotations and labels is that annotations lies within the graph.
+
+```{r}
+#annotations
+label_info <- mpg |>
+  group_by(drv) |> # need a chr or fac variable
+  arrange(desc(displ)) |> # descending order
+  slice_head(n = 1) |>  # 
+  mutate(
+    drive_type = case_when(
+      drv == "f" ~ "front-wheel drive",
+      drv == "r" ~ "rear-wheel drive",
+      drv == "4" ~ "4-wheel drive"
+    )
+  ) |>
+  select(displ, hwy, drv, drive_type)
+label_info #generate the dots at the end of each group
+
+ggplot(mpg, aes(x = displ, y = hwy, color = drv)) +
+  geom_point(alpha = .3) +
+  geom_smooth(se = FALSE) +
+  geom_text(
+    data = label_info, 
+    aes(x = displ, y = hwy, label = drive_type),
+    fontface = "bold", size = 5, hjust = "right", vjust = "bottom"
+  ) + #geom_text is a function to write on plot.
+  theme(legend.position = "none")
+```
+
+`group_by()` divide the data according to a certain variable. To do calculation, you need to use other functions such as `summarize()`,`mutata()`,`filter()`
+
+`arrange(desc(displ))`
+
+-   What it does: sorts rows by `displ` from largest to smallest.
+
+-   Tie-breakers: add more keys after it.
+
+    `arrange(desc(displ), highway)` means if two items are same in `displ`, arrange the order by ascending order of `highway`.
+
+-   NA position: `dplyr::arrange()` puts `NA` at the end, no matter ascending or descending
+
+-   **Sort within group:**
+
+    `df %\>% group_by(cyl) %\>% arrange(desc(displ), .by_group = TRUE)`,otherwise, sort globally.
+
+`slice_head(n = 1)` could extract the first `n` rows by the current order.
+
+-   `slice_max()`/`slice_min()` can also extract the largest rows or the smallest rows.
+
+    `df %>% slice_max(order_by = x, n = 3)`
+
+    `df %>% slice_min(order_by = x, n = 3)`
+
+-   `slice_head(prop = 0.1)` extract the first 10% rows.
+
+-   `slice_head(.by =,n=)` can group temporarily, no need to use `group_by()` first.
+
+`hjust`and `vjust` in `geom_text` is to guide the specific cortex of text block to locate.
+
+Since we have text on the plot, legend seems to be unnecessary. If legend is added, it's differerent from that without annotation.
+
+```{r}
+#annotations
+label_info <- mpg |>
+  group_by(drv) |> # need a chr or fac variable
+  arrange(desc(displ)) |> # descending order
+  slice_head(n = 1) |>  # 
+  mutate(
+    drive_type = case_when(
+      drv == "f" ~ "front-wheel drive",
+      drv == "r" ~ "rear-wheel drive",
+      drv == "4" ~ "4-wheel drive"
+    )
+  ) |>
+  select(displ, hwy, drv, drive_type)
+label_info #generate the dots at the end of each group
+
+ggplot(mpg, aes(x = displ, y = hwy, color = drv)) +
+  geom_point(alpha = .3) +
+  geom_smooth(se = FALSE) +
+  geom_text(
+    data = label_info, 
+    aes(x = displ, y = hwy, label = drive_type),
+    fontface = "bold", size = 5, hjust = "right", vjust = "bottom"
+  )
+```
+
+## potential outliers
+
+```{r}
+library(ggrepel)
+potential_outliers <- mpg |>
+  filter(hwy > 40 | (hwy > 20 & displ > 5))
+
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point() +
+  geom_text(data = potential_outliers, aes(label = model)) +
+  geom_point(data = potential_outliers, color = "red") +
+  geom_point(
+    data = potential_outliers,
+    color = "red", size = 3, shape = "circle open"
+  )
+```
+
+`geom_text_repel` draws a rectangle underneath the text, making it easier to read. The text labels repel away from each other and away from the data points.
+
+```{r}
+library(ggrepel)
+potential_outliers <- mpg |>
+  filter(hwy > 40 | (hwy > 20 & displ > 5))
+
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point() +
+  geom_text_repel(data = potential_outliers, aes(label = model)) +
+  geom_point(data = potential_outliers, color = "red") +
+  geom_point(
+    data = potential_outliers,
+    color = "red", size = 3, shape = "circle open"
+  )
+```
+
+## changing scale ticks and values
+
+### default
+
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy, color=drv)) +
+  geom_point(aes(color = drv))
+```
+
+### specified
+
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy, color = drv)) +
+  geom_point() +
+  scale_y_continuous(breaks = seq(15, 40, by = 5))
+```
+
+## legends
+
+```{r}
+base <- ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(aes(color = class))
+#position
+base + theme(legend.position = "right") # the default
+base + theme(legend.position = "left")
+base + 
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 3))
+base + 
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 3))
+```
+
+## size
+
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth(se = FALSE) +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2, override.aes = list(size = 4)))
+
+```
+
+`guides(color = ...)`: customize the color legend only; other legends remain unchanged.
+
+`guide_legend(nrow = 2)`: arrange legend items in two rows (handy when the legend is at the bottom).
+
+If you want row-wise filling, add `byrow = TRUE` (the default is column-wise).
+
+`override.aes = list(size = 4)`: change the legend point style only; it does not affect actual point sizes/line widths in the plot. Often used to make the legend clearer (you can also set `alpha = 1`, `shape = 16`, etc.).
+
+# Exercises
+
+Use annotate() to add a point geom in the middle of your last plot without having to create a tibble. Customize the shape, size, or color of the point.
+
+```{r}
+x=max(mpg$displ)
+y=filter(mpg,displ==x)$hwy
+
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth(se = FALSE) +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2, override.aes = list(size = 4)))+
+  geom_text(
+    
+    aes(x = x, y = y, label = "hwy vs displ"),
+    fontface = "bold", size = 5, hjust = "right", vjust = "bottom",color="red"
+  ) 
+```
+
+Change the axis labels on the hwy variable so they show multiples of 5 (or 2 or 1, your choice).
+
+```{r}
+x=max(mpg$displ)
+y=filter(mpg,displ==x)$hwy
+
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth(se = FALSE) +
+  theme(legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2, override.aes = list(size = 4)))+
+  geom_text(
+    
+    aes(x = x, y = y, label = "hwy vs displ"),
+    fontface = "bold", size = 5, hjust = "right", vjust = "bottom",color="red"
+  ) +
+  scale_y_continuous(breaks = seq(10,50,by=5))
+```

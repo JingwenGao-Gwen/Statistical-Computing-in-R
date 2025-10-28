@@ -1,0 +1,339 @@
+---
+title: "Exerciese6"
+author: "Jingwen GAO"
+date: "2025-09-17"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy = T,warning = F,message = F)
+```
+
+EDA is first a set of mental disciplines:
+
+-   skepticism regarding statistical summaries and inferences
+-   curiosity about what insights may be "hidden" in the data
+-   openness to what data may show us
+-   investigative impulse
+
+These data analytic disciplines work through and depend upon one's
+knowledge and facility with data visualization and exploratory tools.
+
+Some initial EDA tasks are **exploring distributions** of
+**quantitative** variables. We want to use tools that allow us to see
+overall shape and individual cases. This exploration seeks to understand
+what the distributional shape may suggest about subpopulations,
+clusters, and unusual cases.
+
+# Normality
+
+```{r}
+library(NHANES)
+library(dplyr)
+new <- NHANES |> filter(SurveyYr=="2011_12" & MaritalStatus=="Married" & Age>20 & Age<65 & Race1=="Black") 
+```
+
+## exploring normality
+
+In statistics, a Q–Q plot (quantile–quantile plot) is a probability
+plot, a graphical method for comparing two probability distributions by
+plotting their quantiles against each other.A point (x, y) on the plot
+corresponds to one of the quantiles of the second distribution
+(y-coordinate) plotted against the same quantile of the first
+distribution (x-coordinate).
+
+```{r}
+library(car)
+car::qqPlot(~ BMI, data = new)
+qqPlot(BMI~Gender,data=new)
+```
+
+The blue bar represents confidence contour.
+
+```{r}
+#normality test code
+library(confintr) #see also ci_skewness()
+
+ci_kurtosis(
+  
+  new$BMI[new$Gender=="male"],
+  
+  probs = c(0.025, 0.975),
+  
+  type = "bootstrap",
+  
+  boot_type = c("bca"))
+```
+
+**Kurtosis** measures how peaked or heavy-tailed a distribution is. Most functions report excess kurtosis:
+
+-   0 → about the same as a normal distribution
+
+-   $>0$ → more peaked, heavier tails (extreme values are more common)
+
+-   $<0$ → flatter, lighter tails
+
+Look at whether the 95% confidence interval (CI) includes 0:
+
+-   Includes 0 → in terms of kurtosis, the data are not significantly different from normal.
+
+-   Entirely above 0 → significantly heavier-tailed/more peaked.
+
+-   Entirely below 0 → significantly lighter-tailed/flatter.
+
+This is not a full normality test. It only evaluates distribution shape from the perspective of kurtosis. For a more complete assessment, you should also check skewness (e.g., `ci_skewness()`) and Q-Q plots.
+
+```{r}
+ci_skewness(
+  new$BMI[new$Gender=="male"],
+  probs=c(0.025,0.975),
+  boot_type = c("bca")
+)
+```
+
+**Skewness** measures how asymmetric a distribution is:
+
+-   0 → symmetric like a normal distribution
+
+-   >0 → right-skewed (longer right tail, more high-BMI outliers)
+
+-   <0 → left-skewed (longer left tail, more low-BMI outliers)
+
+Here the sample estimate = 1.245, which is clearly positive → the male BMI distribution is right-skewed.
+
+Since 0 is not included, we can say the skewness is significantly > 0 at the 5% level.
+
+Interpretation: the male BMI distribution is not symmetric; it has a noticeable right tail.
+
+When analyzing or modeling, you might need:
+
+-   A transformation (e.g., log or Box–Cox) if normality is required.
+
+-   Or use nonparametric / robust methods that don’t assume symmetry.
+
+# density & rug plots to explore shape
+```{r}
+library(lattice)
+densityplot(~BMI,data=new,
+            groups=Gender,
+            plot.points=T,
+            bw=2,
+            auto.key=TRUE)
+densityplot(~BMI|Gender,data=new,
+            plot.points=T,
+            bw=2,
+            layout=c(1,2))
+
+```
+The larger `bw` is, the smoother the density is.
+
+`plot.points=T` helps to view the sample distribution on x-axis.
+
+`auto.key` adds legend to the graph.
+
+```{r}
+densityplot(~BMI,data=new)
+```
+
+# histograms to identify intervals
+```{r}
+library(ggplot2)
+ggplot(new,aes(x=BMI)) +
+  geom_histogram(color = "black", fill = "red", binwidth = 2.5) +
+  facet_grid(cols = vars(Gender))
+
+```
+
+Identify intervals” usually means using the histogram to choose or adjust the bin width or cut points (for example, deciding to use 18.5, 25, 30… or equally spaced bins of width 2.5), in order to facilitate subsequent frequency tables, grouped statistics, or categorical modeling.
+
+```{r}
+#boxplot with data points
+boxplot(BMI ~ Gender, data = new, col = "white")
+stripchart(BMI ~ Gender,
+           data = new,
+           method="jitter",
+           pch = 19,
+           col = 2:4,
+           vertical = T,
+           add = T)
+```
+`method="jitter"` means give each point a horizontal vibration so that they don't overlap with each other.
+
+`pch=19` means solid circle.
+
+`col=2:4` means uses label 2 to 4 color.
+
+`verticle=T` means y-axis is the variable.
+
+`add=T` means strip plot will add on current boxplot. At last you will only have one plot. If `add=F`, you will turn out to have two seperate plots, one is boxplot, the other is stripchart.
+```{r}
+#boxplot with data points
+boxplot(BMI ~ Gender, data = new, col = "white")
+stripchart(BMI ~ Gender,
+           data = new,
+           method="jitter",
+           pch = 19,
+           col = 2:4,
+           vertical = F,
+           add = F)
+```
+
+# lattice violin
+
+```{r}
+bwplot(BMI~Gender,data=new,
+       layout=c(2,2),panel=panel.violin)
+bwplot(BMI ~ Gender | cut(Age, c(20,35,50,65)),
+       data = new, panel = panel.violin,
+       layout = c(2, 2))  
+
+```
+
+Lattice actually means plot on condition. Each condition takes up one panel, and if you have multiple conditions, `layout=c()` controls their relative positions. 
+
+
+# statistical stuff: reshape of distribution
+
+## normality test
+```{r}
+shapiro.test(new$BMI)#<- base R function
+library(rstatix)
+new %>%
+  group_by(Gender) %>%
+  shapiro_test(BMI) #<- pipe friendly function
+```
+
+`Shapiro-Wilk` test will test if the distribution is a normal distribution. Here p-value is really small, meaning that we reject that it is from a normal distribution.
+
+# skew/kurtosis
+
+positive skewness means heavy right tails.
+
+The "heaviness" of the tail refers to how quickly the probability decays as you move away from the center of the distribution, while skewness deals with symmetry or lack thereof. Any symmetric distribution will have a skewness of zero - no matter how fat its tails. This is because of the third power in its definition, which allows deviations in both tails to cancel out. 
+
+```{r}
+library(moments)
+skewness(new$BMI[new$Gender=="female"],na.rm=T)
+skewness(new$BMI[new$Gender=="male"],na.rm=T)
+```
+Kurtosis does measure the tail(s) of the distribution, because it is the expected value of z to the fourth power. If you have some large z values, then you have large kurtosis. Positive kurtosis indicates a distribution with heavier tails (and usually a more peaked shape than a normal distribution), while negative kurtosis indicates lighter tails and a less peaked shape. The data set with larger kurtosis has greater tail heaviness (or more precisely, tail leverage) than the other data set.
+
+```{r}
+kurtosis(new$BMI[new$Gender=="female"],na.rm=T)
+kurtosis(new$BMI[new$Gender=="male"],na.rm=T)
+```
+
+For perfect normal, skewness is 0 and kurtosis is 3.
+
+# paper exercises
+
+show how to generate a group-means plot in R (see Figure 1). 
+
+```{r}
+library(NHANES)
+gm<-NHANES|>
+  filter(!is.na(Weight))|>
+  group_by(Gender)
+means<-gm|>
+  summarise(mean=mean(Weight))
+
+ggplot(gm,aes(x=Weight,colour = Gender))+
+  geom_density()+
+  geom_rug()+
+  geom_vline(data = means,aes(xintercept = mean,colour = Gender),linetype="dashed")
+```
+
+Show how to generate moderator plots in R (see Figure 2).
+
+```{r}
+library(NHANES)
+library(ggplot2)
+library(ggExtra)
+
+modplot <- NHANES %>% 
+  drop_na(Weight)%>%
+  drop_na(Height)%>%
+  drop_na(Gender)
+
+plot <- ggplot(modplot, aes(x=Height, y=Weight, color=Gender)) +
+geom_point() +
+geom_smooth() +
+theme(legend.position="bottom")
+
+ggMarginal(plot, type="histogram", groupColour = T, groupFill = T)
+```
+
+```{r}
+library(NHANES)
+library(ggplot2)
+library(ggExtra)
+
+modplot <- NHANES %>% 
+  drop_na(Weight)%>%
+  drop_na(Height)%>%
+  drop_na(Gender)
+
+plot <- ggplot(modplot, aes(x=Height, y=Weight, color=Gender)) +
+geom_point() +
+geom_smooth() +
+theme(legend.position="bottom")
+
+ggMarginal(plot, type="boxplot", groupColour = T, groupFill = T)
+```
+
+#Exercises and go-beyonds:
+
+In the NHANES data (filtered with the variables in the class examples), 
+```{r}
+library(NHANES)
+library(dplyr)
+new <- NHANES |> filter(SurveyYr=="2011_12" & MaritalStatus=="Married" & Age>20 & Age<65 & Race1=="Black") 
+```
+
+generate QQ plots and explore possible "explanations" on a case-by-case basis, using the case numbers returned by the car pkg function.
+
+```{r}
+q<-car::qqPlot(new$Poverty)
+```
+
+
+
+Outliers can be values from people not in the population of interest.What covariates or suggestions emerge that might help explain those most extreme cases? 
+```{r}
+new[q,] 
+```
+
+ How can you use arrange() and select() to facilitate that
+exploration? 
+
+```{r}
+new%>%
+  slice(q)%>%
+  arrange(desc(BMI))
+```
+
+In the NHANES data create a dataframe of the 09-10 data, over 65 participants. Explore the distribution of DirectChol by Gender with QQ plots. Read the plots and describe the tails as heavy or light.
+
+```{r}
+newest<-filter(NHANES,SurveyYr=="2009_10")
+car::qqPlot(DirectChol~Gender,newest)
+
+```
+The right ends (large quantiles) bend above the straight line in both panels → right tail heavier than Normal (more high DirectChol than a Normal would predict).
+
+The left ends are a bit below the line → left tail lighter (fewer very small values than Normal).
+
+So: heavy right tail, light/near-normal left tail for both genders; males may look slightly heavier in the upper tail.
+
+Generate histograms or density plots to visualize those distributions. 
+```{r}
+library(ggplot2)
+ggplot(newest,aes(x=DirectChol)) +
+  geom_histogram(color = "black", fill = "red") +
+  facet_grid(cols = vars(Gender))
+```
+
+

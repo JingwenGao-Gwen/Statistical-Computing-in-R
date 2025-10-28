@@ -1,0 +1,482 @@
+---
+title: "Exercise5"
+author: "Jingwen GAO"
+date: "2025-09-15"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T,warning = FALSE, message = FALSE)
+```
+
+# basic dyplr operations
+
+```{r}
+library(tidyverse)
+library(NHANES)
+```
+
+## operate on rows
+
+First we learn to check levels of variables
+
+```{r}
+str(NHANES)                 # or str(NHANES$SurveyYr)
+levels(NHANES$SurveyYr)     
+table(NHANES$SurveyYr)      
+
+```
+
+## filter
+
+```{r}
+# filter data
+
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female") |>  
+  group_by(Race1)|>
+  summarize(
+    income=mean(HHIncomeMid,na.rm = T))
+```
+
+`summarize()` contract a group of data into a vector of statistics.
+
+Note that if you choose `na.rm=F` in `mean()`, the result will be `NA`.
+
+### filter with group_by
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female") |>
+  filter(!is.na(Education))|>
+  group_by(Education)|>
+  summarize(
+    income_mean=mean(HHIncomeMid,na.rm=TRUE),
+    income_median=median(HHIncomeMid,na.rm=TRUE))
+```
+
+```{r}
+# Another way to throw away NA
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female") |>
+  drop_na(Education) |>
+  group_by(Education)|>
+  summarize(income_mean=mean(HHIncomeMid,na.rm=TRUE),
+            incomeSD=sd(HHIncomeMid,na.rm=TRUE))
+```
+
+### filter by numeric variable
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Age>65) |>
+  group_by(Education)|>
+  summarize(income_mean=mean(HHIncomeMid,na.rm=TRUE))
+```
+
+### filter using multiple variables
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female" & MaritalStatus=="Married") |>
+  summarize(income_mean=mean(HHIncomeMid,na.rm=TRUE))
+```
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female" & BMI>30 ) |>
+  summarize(income_mean=mean(HHIncomeMid,na.rm=TRUE))
+```
+
+## arrange
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  arrange(BMI,na.rm=TRUE) |>
+  select(BMI)
+```
+
+`arrange(variable)` sort the variable by ascending order
+
+`select(variable)` extract the specific column out of a data frame.
+
+### descending order
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  arrange(desc(BMI),na.rm=TRUE) |>
+  select(BMI)
+```
+
+### display other variables
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  arrange(desc(BMI),na.rm=TRUE) |>
+  select(BMI,Poverty,PhysActive)
+```
+
+# operate on columns
+
+## mutate
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") %>%
+  drop_na(Length) |>
+  mutate(babylength=Length*.39, .before=2)
+```
+
+Note that argument `.before=2` is to arrange this column before the current second column of the data frame. Similarly, `.after=2` is to arrange this column after the current second column of the data frame.
+
+If no guide to the position, column is added to the end of the data frame by default.
+
+## generate statistics for new variable
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  drop_na(Length) |>
+  mutate(babylength=Length*.39, .before=1) |>
+  group_by(Gender) |>
+  summarize(mean_inch=mean(babylength))
+```
+
+# piping into ggplot example
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female") |> 
+  ggplot(aes(x=BMI)) +
+  geom_histogram()
+```
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  filter(Gender=="female") |> 
+  ggplot(aes(x=BMI,y=TotChol)) +
+  geom_point() +
+  geom_smooth()
+
+```
+
+# recoding cateogical variables
+
+## frequency table
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10" & Gender=="female") |>
+  count(MaritalStatus) |>
+  mutate(prop = prop.table(n))
+```
+
+`count()` lets you quickly count the unique values of one or more variables
+
+```{r}
+NHANES |>
+  filter(SurveyYr=="2009_10") |>
+  mutate(new_marital = dplyr::recode(MaritalStatus, "Married" = "married",.default = "other")) |>
+  count(new_marital) |>
+  mutate(prop = prop.table(n))
+```
+
+`.default` enables every value that wasn't recoded a common value.
+
+# Exercises in the NHANES 2009-10 survey data:
+
+1.  Find mean of total cholesterol for men. Does mean cholesterol level in men depend on whether they report sleep trouble?
+
+```{r}
+NHANES|>
+  drop_na(TotChol)%>%
+  drop_na(Gender)%>%
+  group_by(Gender)%>%
+  summarise(mean(TotChol))
+
+t1<-NHANES|>
+  drop_na(TotChol)%>%
+  filter(Gender=="male")%>%
+  drop_na(Gender)%>%
+  drop_na(SleepTrouble)%>%
+  group_by(SleepTrouble)%>%
+  summarise(mean(TotChol),
+            sd(TotChol),
+            count=length(TotChol))
+t1
+sample_deviation<-sum(t1$`sd(TotChol)`^2/(t1$count))^0.5
+t1$`mean(TotChol)`[1]-t1$`mean(TotChol)`[2]-qnorm(0.975)*sample_deviation
+t1$`mean(TotChol)`[1]-t1$`mean(TotChol)`[2]+qnorm(0.975)*sample_deviation
+# do not reject the null.
+```
+
+2.  Looking only at the females' data, find the mean age at which the participant had their 1st baby. Does this vary by education level?
+
+```{r}
+NHANES%>%
+  filter(Gender=="female")%>%
+  drop_na(Age1stBaby)%>%
+  drop_na(Education)%>%
+  group_by(Education)%>%
+  summarise(mean=mean(Age1stBaby))
+```
+
+3.  Find the mean reported days/month of having bad mental health for participants living at or below 2 (the ratio of income to poverty level). Does reported poor mental health among impoverished participants differ by gender?
+
+```{r}
+NHANES|>
+  filter(Poverty<=2)|>
+  drop_na(DaysMentHlthBad)|>
+  summarise(mean(DaysMentHlthBad))
+
+NHANES|>
+  filter(Poverty<=2)|>
+  drop_na(DaysMentHlthBad)|>
+  drop_na(Gender)|>
+  group_by(Gender)|>
+  summarise(mean(DaysMentHlthBad))
+
+t2<-NHANES|>
+  filter(Poverty<=2)|>
+  drop_na(DaysMentHlthBad)|>
+  drop_na(Gender)|>
+  group_by(Gender)|>
+  summarise(mean(DaysMentHlthBad),
+            n=n(),
+            sd=sd(DaysMentHlthBad))
+
+
+```
+
+4.  Create a new weight variable in lbs (wt_lbs) and find the mean for the overall sample for that new variable, then by diabetes status and gender (combined).
+
+```{r}
+NHANES|>
+  drop_na(Weight)|>
+  mutate(wt_lbs=Weight * 2.20462262)|>
+  summarise(mean=mean(wt_lbs))
+
+NHANES|>
+  drop_na(Weight)|>
+  mutate(wt_lbs=Weight * 2.20462262)|>
+  drop_na(Diabetes)|>
+  drop_na(Gender)|>
+  group_by(Diabetes,Gender)|>
+  summarise(mean=mean(wt_lbs))
+```
+
+5.  Show how you can use filter() and group_by() and pipe the data to a plot function rather than to summarize() for statistics.
+
+```{r}
+NHANES|>
+  drop_na(Weight)|>
+  mutate(wt_lbs=Weight * 2.20462262)|>
+  drop_na(Diabetes)|>
+  drop_na(Gender)|>
+  group_by(Diabetes,Gender)|>
+  ggplot(aes(x=interaction(Diabetes,Gender)))+
+  geom_boxplot(aes(y=wt_lbs))+
+  coord_flip()
+
+```
+
+# Some "Go Beyonds":
+
+1.  When you operate on rows via filter, you get a display of the first 10 rows of the tibble. How do you display more than 10 rows of a tibble? How do you display the full tibble, which would be reasonable for a small sample dataset?
+
+```{r,echo=TRUE, eval=FALSE}
+NHANES%>%
+  filter(Gender=="female")%>%
+  print(n=100)
+
+NHANES%>%
+  filter(Gender=="female")%>%
+  print(n=nrow())
+
+print(as.tibble(NHANES),n=nrow())
+```
+
+2.  If you use group_by(), figure out and explain under what circumstances you would want to ungroup() the data.
+
+```{r}
+n<-NHANES %>% 
+  group_by(Gender) %>% 
+  mutate(m = mean(Age,na.rm=T)) %>%   # calculates the average age of males and females
+  mutate(x = mean(BMI,na.rm=T)) %>% # counts number of participants
+  ungroup()                 # closing ungroup()
+levels(as.factor(n$m))
+levels(as.factor(n$x))
+```
+
+```{r}
+n<-NHANES %>% 
+  group_by(Gender) %>% 
+  mutate(m = mean(Age,na.rm=T)) %>%   # calculates the average age of males and females
+  ungroup()%>%
+  mutate(x = mean(BMI,na.rm=T)) # counts number of participants
+                   # closing ungroup()
+levels(as.factor(n$m))
+levels(as.factor(n$x))
+```
+
+3.  When you create a new variable, it is by default put on the right side of the dataframe, which means in dataframes with many variables you can't see it. How do you move it to the left?
+
+```{r}
+NHANES %>% 
+  group_by(Gender) %>% 
+  mutate(m = mean(Age,na.rm=T),.before = 2)
+```
+
+4.  Post an example of how the `distinct()` function might be useful to your exploring of data, using the NHANES data.
+
+The `dplyr::distinct()` function is a simple tool for pulling out unique rows or unique combinations of variables to get a clearer sense of the structure of your data.
+
+```{r}
+NHANES |>
+  select(Education) |>
+  distinct()
+```
+
+Multiple Variables
+
+We can also check unique combinations.
+
+```{r}
+NHANES |> 
+  select(Gender, Education) |>
+  distinct() |>
+  arrange(Education)
+```
+
+Combining distinct() with nrow() gives the number of unique rows.
+
+```{r}
+NHANES |> 
+  select(Education) |>
+  distinct() |>
+  nrow()
+```
+
+Maybe...try to add the `count`.
+
+```{r}
+NHANES |> 
+  count(Education)
+```
+
+```{r}
+NHANES|>
+  count(Education,Gender,sort = T)
+```
+
+5.  Figure out how to use the tabyl() function (janitor package) to create tidy frequecy table. Post some instructions and examples of its various uses.
+
+Analysts do a lot of counting. But the base R function for counting, table(), leaves much to be desired:
+
+-   It doesn’t accept data.frame inputs (and thus doesn’t play nicely with the %\>% pipe)
+
+-   It doesn’t output data.frames
+
+-   Its results are hard to format. Compare the look and formatting choices of an R table to a Microsoft Excel PivotTable or even the table formatting provided by SPSS.
+
+`tabyl()` is an approach to tabulating variables that addresses these shortcomings. It’s part of the janitor package because counting is such a fundamental part of data cleaning and exploration.
+
+```{r}
+library(janitor)
+```
+
+-   One way `tabyl`
+
+```{r}
+NHANES%>%
+  tabyl(Education)
+```
+When NA values are present, `tabyl()` also displays “valid” percentages, i.e., with missing values removed from the denominator. 
+
+And while `tabyl()` is built to take a `data.frame` and column names, you can also produce a one-way `tabyl` by calling it directly on a vector:
+
+```{r}
+x<-c("High","High","Medium","Low","Low",NA)
+tabyl(x)
+```
+Most `adorn_` helper functions are built for 2-way `tabyl`s, but those that make sense for a 1-way `tabyl` do work:
+
+```{r}
+NHANES%>%
+  tabyl(Education)%>%
+  adorn_totals("row")%>%
+  adorn_pct_formatting()
+```
+
+-   Two way `tabyl`
+
+This is often called a “crosstab” or “contingency” table. Calling `tabyl` on two columns of a data.frame produces the same result as the common combination of `dplyr::count()`, followed by `tidyr::pivot_wider()` to wide form:
+
+```{r}
+NHANES%>%
+  tabyl(Gender,Education)
+```
+```{r}
+NHANES%>%
+  tabyl(Gender,Education)%>%
+  adorn_totals("row")%>%
+  adorn_pct_formatting()%>%
+  adorn_ns()
+```
+
+-   Three way `tabyl`
+
+```{r}
+NHANES%>%
+  tabyl(Gender,Education,Work)
+
+```
+
+```{r}
+NHANES%>%
+  tabyl(Gender,Education,Work)%>%
+  adorn_totals("row") %>% #percentage of all the combinations of 3 variables.
+  adorn_percentages("all") %>%
+  adorn_pct_formatting(digits = 1) %>%
+  adorn_ns
+```
+
+6.  Occasionally we want to recode a numeric variable into a categorical (when, for example, it is bimodal or has very little variance). Show how to create a categorical variable from a numeric variable (like DaysPhysHlthBad) using mutate.
+
+```{r}
+NHANES|>
+  mutate(DaysPhysHlthBad=ifelse(DaysPhysHlthBad==0,"Good Physical Health","Bad Physical Health"))|>
+  relocate(DaysPhysHlthBad,.before=2)
+
+```
+
+```{r}
+NHANES|>
+  relocate(DaysPhysHlthBad,.before=2)
+```
+
+7.  Can you retrieve the 5-number summary for a boxplot through the geom_boxplot() function or with another tidy function?
+
+```{r}
+pp<-ggplot(NHANES)+
+  geom_boxplot(aes(x=Education,y=SmokeAge))
+ggplot_build(pp)[1]
+```
+
+```{r}
+pp<-ggplot(NHANES)+
+  geom_boxplot(aes(x=Education,y=SmokeAge))
+layer_data(pp)
+```
+

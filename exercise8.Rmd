@@ -1,0 +1,260 @@
+---
+title: "Exercise 8"
+author: "Jingwen GAO"
+date: "2025-09-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=F,tidy=T,message = F)
+```
+
+# smoothed scatterplots by group
+```{r}
+library(NHANES)
+library(tidyverse)
+```
+
+
+## grouped scatterplots 
+
+For downstream modeling, you want to know if there are
+
+ a) nonlinear relationships
+
+ b) interactions (do the predictors we are exploring interact in any way? $1+1\ne2$)
+ 
+```{r}
+new <- NHANES |> filter(SurveyYr=="2011_12" & Gender=="female" & Age>20 & Age<65)
+```
+
+### OLS
+
+```{r}
+# color plot the SleepTrouble groups separately (should be a factor)
+  # hard to see interaction if the group variable is numerical
+
+new |> 
+  ggplot(aes(x=Age, y=TotChol, color=SleepTrouble)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+```
+
+### loess
+```{r}
+new |> 
+  ggplot(aes(x=Age, y=TotChol, color=SleepTrouble)) +
+  geom_point() +
+  geom_smooth(method="loess",se=F,span=.7)
+```
+
+
+### Tukey line
+```{r}
+# computing Tukey lines separately by group
+tukey_no <- line(new$Age[new$SleepTrouble=="No"],new$TotChol[new$SleepTrouble=="No"], iter=5)
+tukey_yes <- line(new$Age[new$SleepTrouble=="Yes"],new$TotChol[new$SleepTrouble=="Yes"], iter=5)
+
+tukey_no # intercept = 3.49, slope = 0.036
+tukey_yes # intercept = 3.46, slope = 0.038
+
+tukey <- data.frame(
+  SleepTrouble = c("No", "Yes"),
+  y_int = c(3.49001, 3.4596),
+  slope = c(0.03606, 0.0384)
+)
+tukey
+```
+
+
+```{r}
+
+# group scatterplot with tukey resistant line
+# in linear form, there doesn't seem to be much interaction
+new |> 
+  ggplot(aes(x=Age, y=TotChol,color=SleepTrouble)) +
+  geom_point() +
+  geom_abline(aes(intercept=y_int, slope=slope, col=SleepTrouble), data=tukey)
+```
+
+# scatterplot matrix
+
+## create scatterplot matrix
+
+```{r}
+library(GGally)
+ggpairs(airquality[,1:4])
+```
+
+`GGally::ggpairs:`scatterplot matrix based on `ggplot2`.
+
+Diagonal: distribution of each variable (density or histogram by default).
+
+lower/upper diagonal: correlation between two variables (scatterplot or correlation coefficient by default).
+
+```{r}
+library(car)
+scatterplotMatrix(airquality[,1:4])
+```
+
+c`ar::scatterplotMatrix:` classic scatterplot matrix.
+
+```{r}
+my_fn <- function(data, mapping, ...){
+  p <- ggplot(data = data, mapping = mapping) + 
+    geom_point() + 
+    geom_smooth(method=loess, se=F, fill="red", color="red", ...) +
+    geom_smooth(method=lm, se=F, fill="blue", color="blue", ...)
+  p
+}
+ggpairs(airquality[,1:4], lower = list(continuous = my_fn))
+```
+
+`ggpairs()` divides the scatterplot matrix into three parts:
+`lower` (the lower triangle), `upper` (the upper triangle), and `diag` (the diagonal).
+
+Within each part, you can specify how to plot different combinations:
+`continuou`s (continuous vs. continuous), `combo` (continuous vs. discrete), `discrete` (discrete vs. discrete).
+
+So:
+
+`lower = list(continuous = my_fn)` means:
+In the lower triangle, whenever a cell involves two continuous variables, use your custom function `my_fn` to draw that panel.
+
+## refining plot
+```{r}
+dat<-airquality[,1:4]
+
+scatterplotMatrix(dat,
+         regLine=list(method=MASS::rlm,col="black"),
+         diagonal=list(method="histogram"),
+         smooth=list(spread=F,span=.5,col.smooth="red"),
+         id=list(n=3),
+         main="Ozone, solar radiation, and wind relationships with temperature"
+         )
+```
+
+`dat <- airquality[,1:4]` retrieve the first four column `Ozone`, `Solar.R`, `Wind`, `Temp`.
+
+`regLine = list(method = MASS::rlm, col = "black")`, overlap a regression linear line in every scatterplot.
+
+`Mass::rlm` is robust regression, resistant to outliers.
+
+`id = list(n = 3)` labels 3 most extreme points in each panels.
+
+## working with scatterplotMatrix()
+```{r}
+regLine=list(method=MASS::rlm,col="black")
+scatterplotMatrix(dat,
+                  regLine=list(method=MASS::rlm,col="black")
+)
+```
+
+
+```{r}
+diagonal=list(method="histogram")
+scatterplotMatrix(dat,
+                  regLine=list(method=MASS::rlm,col="black"),
+                  diagonal=list(method="histogram")
+)
+```
+
+
+```{r}
+smooth=list(method=loessLine, spread=F, span=.2,col.smooth="red")
+scatterplotMatrix(dat,
+                  regLine=list(method=MASS::rlm,col="black"),
+                  diagonal=list(method="histogram"),
+                  smooth=list(method=loessLine,spread=F,span=.5,
+                              lty.smooth=3,col.smooth="red")
+)
+```
+# Other exercises:
+
+1. In the Salaries data (car), explore the relationship between years since Phd and Salary, by sex as a panelled variable. Using linear as well as loess smoothers to explore functional relationships. Then add discipline as a conditioning variable.
+
+```{r}
+ggplot(Salaries)+
+  geom_point(aes(x=yrs.since.phd,y=salary))+
+  geom_smooth(aes(x=yrs.since.phd,y=salary,color="linear"),method="lm",se=F)+
+  geom_smooth(aes(x=yrs.since.phd,y=salary,color="loess"),method="loess",se=F)+
+  facet_grid(rows=vars(sex),cols=vars(discipline))
+```
+
+2. Explore the distribution of salary by sex and discipline with boxplots.
+
+```{r}
+ggplot(Salaries)+
+  geom_boxplot(aes(x=interaction(Salaries$sex,Salaries$discipline,lex.order=T,drop=T),y=salary))
+```
+
+
+3. For fun, pass the full Salaries dataset to the ggpairs() function and see what you get. Can you make sense of those plot? Then, use select() to generate a scatterplot matrix for just the numeric variables in Salaries. Add a smoother(s).
+
+```{r}
+ggpairs(Salaries)
+```
+
+```{r}
+library(dplyr)
+newer<-Salaries%>%
+  dplyr::select(where(is.numeric))
+ggpairs(newer)
+```
+```{r}
+my_fn <- function(data, mapping, ...){
+  p <- ggplot(data = data, mapping = mapping) + 
+    geom_point() + 
+    geom_smooth(method=loess, se=F, fill="red", color="red", ...) +
+    geom_smooth(method=lm, se=F, fill="blue", color="blue", ...)
+  p
+}
+ggpairs(newer,lower = list(continuous=my_fn))
+```
+
+4. 
+
+`slice_sample()`
+
+get n rows
+
+```{r}
+library(dplyr)
+set.seed(1)
+Salaries |> slice_sample(n = 5)
+```
+
+
+
+by proportions:
+
+```{r}
+Salaries |> slice_sample(prop = 0.10)
+```
+
+
+with replacement:
+
+```{r}
+Salaries |> slice_sample(n = 5, replace = TRUE)
+```
+
+
+
+higher weight, higher probability to be fetched.
+
+```{r}
+Salaries |> slice_sample(n = 5, weight_by = salary)
+```
+
+
+sample respectively by group:
+
+```{r}
+Salaries |> 
+  group_by(sex) |> 
+  slice_sample(n = 3)
+```
+
+
+

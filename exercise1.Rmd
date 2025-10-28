@@ -1,0 +1,402 @@
+---
+title: "Exercise1"
+author: "Jingwen GAO"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy = T,warning = FALSE, message = FALSE)
+```
+
+# Content
+
+At today's course, we focused on basic plots in ggplot.
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(palmerpenguins)
+library(tinytex)
+```
+
+## Univariate summary
+
+### categorical data
+
+Using barplot.
+
+```{r}
+ggplot(data=penguins,
+       mapping=aes(x=species))+geom_bar()
+```
+
+Note that `aes()` is to transport the variables in data to the mapping
+so that `ggplot2` would know what to manipulate.
+
+You can change the y axis so that the labels on the y axis can satisfy
+your requirements.
+
+```{r}
+library(scales)
+ggplot(penguins,aes(species))+
+  geom_bar(aes(y=..prop..,group = 1))+
+  scale_y_continuous(labels=percent_format())
+```
+
+Note that `percent_format()` is an installed function of `scale`
+package. It transforms the digital label into percentage.
+
+What `geom_bar(aes(y = ..prop.., group = 1))` means?
+
+`geom_bar()` uses `stat = "count"` by default, which creates computed
+variables:
+
+`..count.`. = frequency per bar
+
+`..prop..` = `..count..` / `sum(..count..)`, i.e., the proportion within
+the current group (and panel)
+
+`group = 1` forces all rows in the panel to be treated as one group when
+computing the denominator.
+
+Without it, ggplot **groups by x** (and fill) so each bar’s denominator
+is just itself → proportions would be 1.
+
+Another syntax is:
+
+```{r}
+library(scales)
+ggplot(penguins,aes(species))+
+  geom_bar(aes(y = after_stat(prop), group = 1))+
+  scale_y_continuous(labels=percent_format())
+```
+
+**Facets:** normalization is per panel. If you need one common
+denominator across panels, pre-compute proportions in the data.
+
+**Examples**
+
+Overall proportion of each class (denominator = all rows in panel)
+
+```{r}
+ggplot(mpg, aes(x = class)) +
+  geom_bar(aes(y = after_stat(prop), group = 1))
+```
+
+Within-class proportions by drv (each x stacks to 100%)
+
+```{r}
+ggplot(mpg, aes(x = class, fill = drv)) +
+  geom_bar(position = "fill")
+```
+
+### numeric data
+
+basic
+
+```{r}
+ggplot(data=penguins,aes(x=body_mass_g))+geom_histogram()
+```
+
+```{r}
+ggplot(penguins, aes(x=body_mass_g))+
+  geom_histogram(binwidth = 400)
+```
+
+```{r}
+ggplot(penguins,aes(x=body_mass_g)) +
+  geom_histogram(binwidth = 100)
+```
+
+A formula for the best binwidth: $2\times \frac{IQR}{n^\frac{1}{3}}$
+
+```{r}
+ggplot(penguins,aes(x=body_mass_g)) +
+  geom_histogram(binwidth = 2*(IQR(penguins$body_mass_g,na.rm = T)/(length(penguins$body_mass_g[!is.na(penguins$body_mass_g)]))^(1/3)))
+```
+
+Density plot
+
+```{r}
+ggplot(penguins,aes(x=body_mass_g)) +
+  geom_density()
+```
+
+Dot plot
+
+```{r}
+ggplot(penguins,aes(x=body_mass_g)) +
+  geom_dotplot(binwidth = 100)
+```
+
+box plot
+
+```{r}
+ggplot(penguins,aes(x=body_mass_g)) +
+  geom_boxplot()
+```
+
+**Takeaway to view a box plot:**
+
+1.  center line = median;
+
+IQR(x) = quantile(x, 3/4) - quantile(x, 1/4)
+
+box = IQR;
+
+whiskers $\approx$ Q1-1.5IQR to Q3+1.5IQR;
+
+dots beyond = outliers (by rule, not “bad data”).
+
+2.  Spread vs. shift:
+
+    box height = variability;
+
+    vertical shift of medians = location difference. Big boxes $\leq$
+    different centers.
+
+3.  Skew hints:
+
+    median off-center in the box, and one whisker much longer $\rightarrow$ likely
+    skew.
+
+4.  Sample size awareness: tiny n $\rightarrow$ unstable quartiles/outliers.
+
+enhancement for presentation
+
+```{r}
+ggplot(penguins, aes(x=body_mass_g))+
+  geom_histogram(binwidth=500,color='black',fill='darkgreen',alpha=.5)+
+  labs(title='Body mass index (g) of penguins (N=344) in the Palmer Archipelago', x="BMI(g)",y="Frequency")
+```
+
+## Bivariate summary
+
+### ANOVA model data (categ X/numeric Y)
+
+```{r}
+ggplot(penguins, aes(x=body_mass_g, fill = species)) + geom_histogram(binwidth=250,alpha=.8) 
+```
+
+```{r}
+ggplot(penguins,aes(x=body_mass_g)) + geom_histogram(binwidth = 200) + facet_grid(rows = vars(species)) 
+```
+
+`facet_grid(var(a variable from data))` enables you to divide the whole
+presentation into panels by group variable that you passed to the
+`var()` parameter.
+
+boxplot
+
+```{r}
+ggplot(data=penguins,aes(x=species, y=body_mass_g)) + geom_boxplot()
+```
+
+### proportions model data (categ X/categ Y)
+
+```{r}
+ggplot(penguins,aes(fill=species,x=island)) + geom_bar(position="dodge") +
+scale_y_continuous(labels=percent_format())
+```
+
+### regression model data (numeric X/numeric Y)
+
+```{r}
+ggplot(data=penguins,aes(x=flipper_length_mm, y=body_mass_g))+
+  geom_point() +
+  geom_smooth(method = "lm",se=F) + 
+  geom_smooth(method ="loess",se=F,span=.1)+
+  geom_smooth(method = "loess",se=F,span=.9,col="red")
+```
+
+# Expectations:
+
+1.  Summarize a categorical variable with a barplot of
+    proportions/percentages.
+
+2.  Summarize a numeric variable with histogram (optimally smoothed) and
+    boxplot.
+
+3.  Summarize bivariate relationship in ANOVA model data with overlaid
+    histograms, panelled histograms, and side-by-side boxplots.
+
+4.  Summarize bivariate relationship in proportions model data with a
+    grouped barplot of proportions/percentages.
+
+5.  Summarize bivariate relationship in regression model data with a
+    smoothed scatterplot, using either linear and/or nonlinear
+    smoother(s).
+
+# Plotting exercises:
+
+1.  In the mpg data, create a histogram of city mpg.
+
+```{r}
+ggplot(mpg,aes(x=cty))+
+  geom_histogram()
+```
+
+2.  Play with the bandwidth
+
+    argument to explore oversmoothing and undersmoothing, and then
+    settle on a bandwidth that does optimal smoothing.
+
+```{r}
+#Oversmoothing
+ggplot(mpg,aes(x=cty))+
+  geom_histogram(binwidth = 10)
+```
+
+```{r}
+#undersmoothing
+ggplot(mpg,aes(x=cty))+
+  geom_histogram(binwidth=0.2)
+```
+
+```{r}
+#optimized
+bw<-IQR(mpg$cty,na.rm = T)/length(mpg$cty[!is.na(mpg$cty)])^(1/3)
+ggplot(mpg,aes(x=cty))+
+  geom_histogram(binwidth=bw)
+```
+
+3.  Create overlaid histograms of city mpg by the drive type variable.
+    Then "facet" those histograms so you see the distributions
+    separately.
+
+```{r}
+ggplot(mpg,aes(x=cty,fill=drv))+
+  geom_histogram(position = "identity",alpha=0.5)
+```
+
+```{r}
+ggplot(mpg,aes(x=cty,fill=drv))+
+  geom_histogram(position = "identity")+
+  facet_grid(rows=vars(drv))
+```
+
+4.  What are the strengths and limitations of each visualization type?
+
+    Generate a set of boxplots of city mpg by drive type. What do
+    boxplots show that histograms obscure, and vice versa? Consult the
+    CRAN documentation for geom_boxplot to figure out how to generate
+    notched boxplots.
+
+```{r}
+ggplot(mpg,aes(y=cty,color=drv))+
+  geom_boxplot()
+```
+
+**notched boxplot:** A notched boxplot is a boxplot with an inward
+“notch” around the median. The notch visualizes an approximate 95%
+confidence interval for the median, computed as:
+
+$median\pm1.58\times\frac{IQR}{\sqrt n}$
+
+If two notches do not overlap, it suggests the groups’ medians differ
+(roughly at the 5% level). This is only an approximation—be cautious
+with small samples or highly skewed data.
+
+```{r}
+ggplot(penguins, aes(x = species, y = body_mass_g)) +
+  geom_boxplot(notch = TRUE, notchwidth = 0.2) 
+# notchwidth: how much proportion of the box width
+```
+
+5.  Generate a barplot of the class variable, with percentage not
+    proportion on the y axis.
+
+```{r}
+ggplot(mpg,aes(x=class))+
+  geom_bar()+
+  scale_y_continuous(labels=percent_format())
+```
+
+6.  Generate a scatterplot of city mpg as a function of displacement
+    (x).
+
+```{r}
+ggplot(mpg,aes(x=displ,y=cty))+
+  geom_point()
+```
+
+7.  Smooth the plot with a least-squares regression line. Play with the
+    `se= argument` in the `geom` function; what does it show you if
+    `se=T`? Smooth the plot with a `loess` (nonlinear) smoother. What
+    does that reveal about the true relationship between x and y?
+
+```{r}
+ggplot(mpg,aes(x=displ,y=cty))+
+  geom_point()+
+  geom_smooth(se=T)
+```
+
+```{r}
+ggplot(mpg,aes(x=displ,y=cty))+
+  geom_point()+
+  geom_smooth(se=F)
+```
+
+# Go-beyonds:
+
+1.  Figure out how to add a layer to label one of your plots, with axis
+    labels and/or a main plot title.
+
+```{r}
+ggplot(mpg,aes(y=cty,color=drv))+
+  geom_boxplot()+
+  labs(title="Title",
+       y="City",
+       color="Car type")
+```
+
+2.  Figure out how to order the categories of class so that the barplot
+    presents them from smallest to largest or largest to smallest. This
+    can be done in/with ggplot functions.
+
+```{r}
+library()
+ggplot(mpg,aes(x=class))+
+  geom_bar(aes(x=fct_infreq(class)))
+```
+
+```{r}
+ggplot(mpg,aes(x=class))+
+  geom_bar(aes(x=fct_rev(fct_infreq(class))))
+```
+
+3.  Figure out how to overlay a density plot on a histogram.
+
+```{r}
+ggplot(mpg,aes(x=cty))+
+  geom_density(col="red",linewidth=2)+
+  geom_histogram(aes(y=..density..),binwidth = 2,alpha=0.5)
+```
+
+4.  What's a violin plot? What does it show that a boxplot doesn't? How
+    do you produce it in ggplot?
+
+A violin plot is a statistical graphic for comparing probability
+distributions. It is similar to a box plot, with the addition of a
+rotated kernel density plot on each side.
+
+A violin plot will include all the data that is in a box plot: a marker
+for the median of the data; a box or marker indicating the interquartile
+range; and possibly all sample points, if the number of samples is not
+too high.
+
+While a box plot shows a summary statistics such as mean/median and
+interquartile ranges, the violin plot shows the full distribution of the
+data. The violin plot can be used in multimodal data (more than one
+peak). In this case a violin plot shows the presence of different peaks,
+their position and relative amplitude.
+
+```{r}
+ggplot(mtcars,aes(factor(cyl),mpg))+
+  geom_violin()
+```
+
+<https://www.sthda.com/english/wiki/ggplot2-violin-plot-quick-start-guide-r-software-and-data-visualization>

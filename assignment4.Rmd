@@ -1,0 +1,111 @@
+---
+title: "Assignment 4"
+author: "Jingwen GAO"
+date: "2025-10-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy=T,warning=F,message=F)
+```
+
+Use the lung (survival) data:
+
+1. Generate tabular and graphical summaries of missing data by variable.
+```{r}
+library(naniar)
+library(finalfit)
+library(survival)
+miss_var_summary(lung)
+```
+
+From the variable-wise tabular summary of missingness, `meal.cal` has the largest amount of missing data (47; 20.6%), followed by `wt.loss` (14; 6.14%). `pat.karno` has 3 missing values (1.32%), and `inst`, `ph.ecog`, and `ph.karno` each have 1 missing value (0.439%). `time`, `status`, `age`, and `sex` have no missing values. 
+
+To inspect which observations are missing in which variables, we use function `vis_miss()`.
+```{r}
+library(naniar)
+library(ggplot2)
+
+vis_miss(lung) +
+  coord_cartesian(clip = "off") +  
+  theme(
+    plot.margin = margin(t = 30, r = 20, b = 10, l = 10) 
+  )
+```
+From the `vis_miss()` plot, missing values are mainly concentrated in the variables `meal.cal` and `wt.loss`, with only a few isolated missing points in `pat.karno`, `ph.karno`, `ph.ecog`, and `inst`. The overall missingness rate is low (2.9%), and the missing observations appear scattered rather than clustered by cases, suggesting that missingness may occur at random rather than systematically.
+
+To inspect the joint missingness between variables, we use `mice::md.pattern()`.
+
+```{r}
+library(mice)
+md.pattern(lung,rotate.names = T) 
+```
+There are 9 patterns of missing data. The plot shows that most missingness occurs independently in single variables. Out of 61 observations with missing values, 56 of them only have one missing value. Only a few records have simultaneous missingness across variables. The majority of the dataset (167 observations) have no missing values. This indicates a relatively simple missing data structure, with no strong multivariate missingness pattern, suggesting that the missingness is likely random rather than systematic.
+
+2. Do a Little MCAR test and interpret with regard to the assumption of MCAR.
+
+```{r}
+mcar_test(lung)
+```
+
+The null hypothesis of Little’s MCAR test states that the missing data are Missing Completely at Random. The test result shows a chi-square statistic of 61.98 with 68 degrees of freedom and a p-value of 0.683. Since the p-value is much greater than common significance levels, we fail to reject the null hypothesis. Therefore, there is no evidence against the MCAR assumption, but to certify this missingness pattern, more investigation is needed.
+
+3. We’ll focus on meal calories, because of the magnitude of missing data on that variable, and try to distinguish between MAR and MNAR models: Are the distributions of age, ph.ecog, ph.karno (pat.karno is highly correlated with ph.karno so we can omit that), and wt.loss dependent on missing data in meal.cal? Demonstrate with a series of density plots of each by a nabular meal.cal variable. Summarize in a sentence or 2. Do the findings argue for MAR or MNAR?
+
+```{r}
+library(ggplot2)
+lung  %>%
+  nabular() %>%
+  ggplot(aes(x = age,color=meal.cal_NA)) + 
+  geom_density()
+```
+The two curves are largely overlapping, with only minor differences in shape and location. This suggests that `age` is not strongly associated with whether `meal.cal` is missing.
+
+```{r}
+lung  %>%
+  nabular() %>%
+  ggplot(aes(x = ph.ecog,color=meal.cal_NA)) + 
+  geom_density()
+```
+The two curves are similar overall, though the group with missing `meal.cal` appears to have slightly higher `ph.ecog` scores. This mild difference suggests that missingness in `meal.cal` may be related to `ph.ecog`, implying that the data are more consistent with a MAR mechanism rather than MNAR.
+
+```{r}
+lung  %>%
+  nabular() %>%
+  ggplot(aes(x = ph.karno,color=meal.cal_NA)) + 
+  geom_density()
+```
+The two curves are significantly different. Missing `meal.cal` is associated with a moderate high `ph.karno`(75-95). This suggests that missingness in `meal.cal` may be related to `ph.karno`, implying that the data are more consistent with a MAR mechanism rather than MNAR.
+
+```{r}
+lung  %>%
+  nabular() %>%
+  ggplot(aes(x = wt.loss,color=meal.cal_NA)) + 
+  geom_density()
+```
+The two curves are largely overlapping. This suggests that `wt.loss` is not strongly associated with whether `meal.cal` is missing.
+
+These results suggest that missingness in `meal.cal` is modestly related to `ph.ecog` and `ph.karno`, but not to `age` or `wt.loss`. Therefore, the missing data pattern is more consistent with a Missing at Random (MAR) mechanism rather than Missing Not at Random (MNAR).
+
+4. Explain a) how a measure of meal calories might suppress its own values, and b) which missing data pattern this would be consistent with.
+
+If meals with very high (or very low) true calories make respondents uncomfortable to reveal, they may intentionally leave the item blank. Because the probability of missingness then depends on the unobserved true value of meal.cal, this mechanism is consistent with MNAR. 
+
+By contrast, if the item is missed simply because calorie calculation is complicated or respondents forget to record, independently of the true calorie amount, then the mechanism would be MCAR.
+
+5. If researchers are interested in the relationship between survival time (y) and weight loss (x), show that the relationship is not dependent on missingness in meal calories.
+
+```{r}
+lung  %>%
+  nabular() %>%
+  ggplot(aes(x = wt.loss,y=time,color=meal.cal_NA)) + 
+  geom_point()+
+  geom_smooth(method="lm",se=F)
+```
+The scatter plot shows the relationship between survival time and weight loss, separated by whether meal.cal is missing (meal.cal_NA). The fitted regression lines for the two groups are nearly parallel and close to each other, indicating that the slope and general trend of time versus wt.loss are very similar regardless of meal.cal missingness.This visual pattern suggests that the association between survival time and weight loss does not depend on whether meal.cal is missing.
+
+```{r}
+summary(lm(time ~ wt.loss * meal.cal_NA, data = nabular(lung)))
+```
+
+Fitting `time ~ wt.loss * meal.cal_NA` shows a non-significant interaction ($\beta = -0.95, p = 0.75$), indicating that the slope of survival time on weight loss is the same for records with and without missing meal.cal. Thus, the `time~wt.loss` relationship does not depend on missingness of `meal.cal_NA`.

@@ -1,0 +1,307 @@
+---
+title: "Exercise5"
+author: "Jingwen GAO"
+date: "2025-09-15"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T,warning = FALSE, message = FALSE)
+```
+
+# needed functions
+
+## scale function
+Transform a value into its Z test statistics.
+```{r}
+x<-c(2,3,4,5,6)
+scale(x)
+```
+`center` is the mean of the sample, by default.
+```{r}
+mean(x)
+```
+
+`scale` is the standard deviation of the sample, by default.
+```{r}
+sd(x)
+```
+
+`scale()` uses the formula $Z_i=\frac{X_i-\bar X}{SE}$
+```{r}
+(x-mean(x))/sd(x)
+```
+
+## mad(x)
+
+The median absolute deviation (MAD) is a robust measure of the variability of a univariate sample of quantitative data. It can also refer to the population parameter that is estimated by the MAD calculated from a sample.
+
+For a univariate data set $X_1, X_2, ..., X_n$, the MAD is defined as the median of the absolute deviations from the data's median $\displaystyle {\tilde {X}}=\operatorname {median} (X)$:
+
+$\displaystyle \operatorname {MAD} =\operatorname {median} (|X_{i}-{\tilde {X}}|)$
+
+that is, starting with the residuals (deviations) from the data's median, the MAD is the median of their absolute values.
+
+```{r}
+mad(x)
+```
+```{r}
+dev<-abs(x-median(x))
+dev
+median(1.4826*dev)
+# 1.4826 is the constant taken into account when computing MAD
+```
+
+```{r}
+boxplot(x)$stats
+```
+
+`boxplot(x)$stats` gives you the five key numbers the boxplot computed.
+
+`boxplot(x)` returns a list; its `$stats` element is a 5 × k matrix (k = number of boxes). Each column is one box; the five rows are:
+
+lower wisker; Q1; median; Q3; upper wisker
+
+# Identify outliers
+
+Many methods exist for identifying outliers in numeric data. Here are 3 common methods:
+
+```{r}
+library(tinytex)
+library(tidyverse)
+library(NHANES)
+```
+
+## 1. z-score rule.
+
+An outlier is a value whose **z score \>** $\pm 3.0$.
+
+The z-score rule is **nonrobust** because extreme values affect the diagnostic statistics. This can result in masking, where the presence of an extreme value can change the mean and variance enough to result in the extreme value not being diagnosed as an outlier.
+
+In the $N(0,1)$ distribution where $\sigma=1$, probability of taking support far from 3 unit away from 0 is rare.
+
+Recall the Z statistics is computed by $\frac{X-\bar X}{SE}$
+
+```{r}
+dat <- NHANES %>%
+  filter(SurveyYr == "2009_10", Gender == "female", Age > 64)
+new<-data.frame(dat$ID,dat$Age,dat$BMI,scale(dat$BMI))
+new[1:10,]
+```
+
+If you want to arrange the row orders, you can use the `[]` indices in `base R`.
+```{r}
+z_out<-new[order(new$dat.BMI,new$scale.dat.BMI.,decreasing = T),]
+#the last , is necessary
+z_out[1:10,]
+```
+
+Now find outliers
+```{r}
+outliers<-z_out|>
+  filter(scale.dat.BMI.>=3|scale.dat.BMI.<=-3)
+outliers
+```
+
+```{r}
+ggplot(dat, aes(Age, BMI)) +
+  geom_point() +
+  geom_point(data = outliers,aes(x=dat.Age,y=dat.BMI,
+             color = "red"), shape = 1, size = 3, stroke = 1.2)
+```
+
+## 2.  Hampel filter. 
+
+An outlier is a value that lies $> 3$ MADs above or below the median. The use of the MAD instead of the SD makes this a more robust diagnostic procedure than z-score, but less robust than boxplot.
+
+```{r}
+hampel_low <- median(dat$BMI,na.rm=T) - 3*mad(dat$BMI,na.rm=T, constant = 1)
+hampel_high <- median(dat$BMI,na.rm=T) + 3*mad(dat$BMI,na.rm=T, constant = 1)
+hampel_high;hampel_low
+```
+```{r}
+dat|>
+  filter(BMI<hampel_low|BMI>hampel_high)|>
+  ggplot(aes(x=Age,y=BMI))+
+  geom_point(data = dat)+
+  geom_point(aes(colour = "red"),size=3,shape=1,stroke=1.2)
+```
+
+
+## 3. boxplot rule. 
+
+An outlier is a value less than the LAV or greater than the UAV. This is the most robust procedure inasmuch as median and IQR are unaffected by extreme values, except in very small samples.
+
+```{r}
+library(car)
+car::Boxplot(dat$BMI,id=list(n=Inf))
+b<-boxplot(dat$BMI)
+b$out
+```
+
+# Exercise
+
+In the NHANES 2009-10 data, filtering to include males, age 65 and greater.
+
+1.  Generate a histogram and table of mean and SD for BPSysAve
+
+```{r}
+dat <- NHANES %>%
+  filter(SurveyYr == "2009_10", Gender == "female", Age > 64)
+ggplot(dat,aes(x=BPSysAve))+
+  geom_histogram()
+```
+
+```{r}
+tab <- dat %>%
+  summarise(
+    n_nonmissing = sum(!is.na(BPSysAve)),
+    mean = mean(BPSysAve, na.rm = TRUE),
+    sd   = sd(BPSysAve, na.rm = TRUE)
+  )
+tab
+```
+
+2.  Find outliers in the BPSysAve data by the z-score, Hampel, and boxplot rules.
+
+```{r}
+#z-score
+zbsa <- data.frame(NHANES$BPSysAve,scale(NHANES$BPSysAve))
+
+nomatterwhat<-zbsa|>
+  filter(scale.NHANES.BPSysAve.>=3|scale.NHANES.BPSysAve.<=-3)
+
+zbsa|>
+  filter(scale.NHANES.BPSysAve.>=3|scale.NHANES.BPSysAve.<=-3)
+```
+
+```{r}
+# Hampel filter
+Hh<- median(dat$BPSysAve,na.rm = T)+3*mad(dat$BPSysAve,na.rm=T,constant = 1)
+Hl<-median(dat$BPSysAve,na.rm = T)-3*mad(dat$BPSysAve,na.rm=T,constant = 1)
+whatever<-dat|>
+  filter(BPSysAve>Hh|BPSysAve<Hl)
+whatever
+```
+
+```{r}
+# boxplot
+library(car)
+car::Boxplot(dat$BPSysAve,id=list(n=Inf))
+b<-boxplot(dat$BPSysAve)
+b$out
+```
+
+3. Remove them and recalculate mean and SD. 
+```{r}
+# z-score
+zbsa <- data.frame(NHANES$BPSysAve,scale(NHANES$BPSysAve))
+
+zbsa|>
+  filter(scale.NHANES.BPSysAve.<3&scale.NHANES.BPSysAve.>-3)|>
+  summarise(mean=mean(NHANES.BPSysAve),
+            sd=sd(NHANES.BPSysAve))
+```
+
+```{r}
+#hampel
+Hh<- median(dat$BPSysAve,na.rm = T)+3*mad(dat$BPSysAve,na.rm=T,constant = 1)
+Hl<-median(dat$BPSysAve,na.rm = T)-3*mad(dat$BPSysAve,na.rm=T,constant = 1)
+dat|>
+  filter(BPSysAve<=Hh&BPSysAve>=Hl)|>
+  summarise(mean=mean(BPSysAve),
+            sd=sd(BPSysAve))
+```
+
+```{r}
+# boxplot
+library(car)
+ids<-car::Boxplot(dat$BPSysAve,id=list(n=Inf,labels=dat$ID))
+# this lables every outliers, up to infinity
+# labels is the row id by default, manually set it as id from dat.
+b<-boxplot(dat$BPSysAve)
+values<-b$out
+#b$out returns all the values of outliers
+dat|>
+  filter(!(BPSysAve %in% values))|>
+  summarise(mean=mean(BPSysAve,na.rm=T),
+            sd=sd(BPSysAve,na.rm=T))
+
+dat|>filter(!(ID %in% ids))|>
+  summarise(mean=mean(BPSysAve,na.rm=T),
+            sd=sd(BPSysAve,na.rm=T))
+afterfilter<-dat|>filter(!(BPSysAve %in% values))
+
+```
+
+# Go-beyond 
+
+See R4DS 10.4. on replacing outlier values with other values.
+
+What does Winsorizing a variable mean?
+
+The winsorized mean is an averaging method that involves replacing the smallest and largest values of a data set with the observations closest to them.
+
+Post an example or demo showing how to identify outlier values in a variable and then replace those values with other less-extreme values. 
+
+```{r}
+example_1<-c(1, 5, 7, 8, 9, 10, 34)
+mean(example_1)
+#replace highest and smallest
+example_1<-sort(example_1)
+example_1[1]<-example_1[2]
+example_1[length(example_1)]<-example_1[length(example_1)-1]
+mean(example_1)
+```
+https://www.investopedia.com/terms/w/winsorized_mean.asp 
+
+```{r}
+library(dplyr)
+library(DescTools) 
+# Or another package providing a winsorize function, e.g., datawizard
+```
+
+```{r}
+# Example using the 'iris' dataset
+iris_winsorized <- iris %>%
+  mutate(
+    # Winsorize Sepal.Length at 5% and 95%
+    Sepal.Length_wins = Winsorize(Sepal.Length,val=quantile(Sepal.Length,probs = c(0.05, 0.95))),
+    # Winsorize Petal.Width at 10% and 90%
+    Petal.Width_wins = Winsorize(Petal.Width,val=quantile(Petal.Width,probs = c(0.10, 0.90)))
+    )
+cat("Before:\n mean of length--",mean(iris_winsorized$Sepal.Length),"\n","mean of width--",mean(iris_winsorized$Petal.Width),"\n")
+cat("After:\n mean of length--",mean(iris_winsorized$Sepal.Length_wins),"\n","mean of width--",mean(iris_winsorized$Petal.Width_wins),"\n")
+```
+https://www.rdocumentation.org/packages/DescTools/versions/0.99.60/topics/Winsorize 
+
+Show how Winsorizing affects summary statistics, relative to dropping outlier values entirely. Share your code too.
+
+```{r}
+summary(iris_winsorized$Sepal.Length)
+summary(iris_winsorized$Sepal.Length_wins)
+summary(iris_winsorized$Petal.Width)
+summary(iris_winsorized$Petal.Width_wins)
+```
+```{r}
+b_len<-boxplot(iris_winsorized$Sepal.Length)
+iris_box<-iris_winsorized|>
+  filter(!(Sepal.Length%in%b_len$out))
+summary(iris_box$Sepal.Length)
+summary(iris_winsorized$Sepal.Length_wins)
+```
+
+Create a table (formatted with tabyl() ideally) showing the unadjusted mean and SD of a variable, as well as the mean and SD of the variable under each outlier rule. You could add the median and MAD for fun to see how much more robust those statistics are than the mean and SD. Share the code or .R file for generating such a table.
+```{r}
+library(janitor)
+```
+
+```{r}
+#1.original 2.z-score 3.hampel 4.boxplot
+means<-c(mean(dat$BPSysAve,na.rm=T),mean(nomatterwhat$NHANES.BPSysAve),mean(whatever$BPSysAve),mean(afterfilter$BPSysAve,na.rm=T))
+sds<-c(sd(dat$BPSysAve,na.rm=T),sd(nomatterwhat$NHANES.BPSysAve),sd(whatever$BPSysAve),sd(afterfilter$BPSysAve,na.rm=T))
+d_f<-data.frame(means,sds)
+d_f
+
+```
+

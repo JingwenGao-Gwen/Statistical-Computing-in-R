@@ -1,0 +1,80 @@
+---
+title: "practiceMidterm1"
+author: "Jingwen GAO"
+date: "2025-10-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy=T,warning=F,message = F)
+```
+
+1. NHANES data. Find the mean reported days/month of having bad mental health for participants living at or below 2 (the ratio of income to poverty level). Does reported poor mental health among impoverished participants differ by gender?
+
+```{r}
+library(NHANES)
+library(dplyr)
+NHANES|>mutate(LivingCond=as.numeric(HHIncome)/Poverty,.before = 2)|>filter(LivingCond<=2)|>
+  summarise(mean=mean(DaysMentHlthBad,na.rm=T))
+```
+Lets' view some distribution of `DaysMentHlthBad` between the two genders.
+```{r}
+library(ggplot2)
+NHANES|>mutate(LivingCond=as.numeric(HHIncome)/Poverty,.before = 2)|>filter(LivingCond<=2)|>
+  ggplot(aes(y=DaysMentHlthBad,fill = Gender))+
+  geom_boxplot()
+```
+
+```{r}
+library(moments)
+NHANES|>mutate(LivingCond=as.numeric(HHIncome)/Poverty,.before = 2)|>
+  filter(LivingCond<=2)|>group_by(Gender)|>
+  summarise(mean=mean(DaysMentHlthBad,na.rm=T),
+            median=median(DaysMentHlthBad,na.rm = T),
+            mad=mad(DaysMentHlthBad,na.rm=T),
+            
+            sd=sd(DaysMentHlthBad,na.rm=T),
+            kurtosis=kurtosis(DaysMentHlthBad,na.rm=T),
+            
+            skewness=skewness(DaysMentHlthBad,na.rm=T))
+```
+
+As the previous results showing, the distribution between the two gender's mentalhealth shows a difference.
+
+  -  Both female and male have a median 0, which means more than half of them reported 0 days of bad mental health.
+  -  Female has a higher mean, more variance
+  -  Male reports more outliers, more right skewed and flatter distribution.
+
+2.In the NHANES data create a dataframe of the 09-10 data, over 65 participants. Explore the distribution of DirectChol by Gender with QQ plots. Read the plots and describe the tails as heavy or light. Generate density plots to visualize those distributions.
+
+```{r}
+new<-NHANES|>filter(SurveyYr=="2009_10",Age>65)
+library(car)
+qqPlot(DirectChol~Gender,data=new) #check variable by groups  
+```
+From the plot, we can see that the distribution of male `Directchol` has heavy right tails. Comparatively, female `DirectChol` distribution has light right tails. Male has a more skewed distribution than female.
+
+
+3.Make a 2-way frequency table with the tabyl function. Adorn with appropriate elements to effectively communicate the joint distribution.
+
+```{r}
+library(knitr)
+library(kableExtra)
+library(janitor)
+library(dplyr)
+library(tidyr)
+
+tab<-NHANES %>%
+  filter(SurveyYr=="2011_12" & Age > 18) %>%
+  drop_na(Education)%>%
+  drop_na(Gender)%>%
+  tabyl(Education, Gender) %>%
+  adorn_totals(c("row", "col")) %>% 
+  adorn_percentages("all") %>% 
+  adorn_pct_formatting(rounding = "half up", digits = 0) %>%
+  adorn_ns() %>% 
+  adorn_title("combined") 
+tab %>%
+  kbl() %>%
+  kable_styling() 
+```

@@ -1,0 +1,365 @@
+---
+title: "exercise9"
+author: "Jingwen GAO"
+date: "2025-10-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy=T,warning=F,message = F)
+```
+
+
+This lecture is about conditional plots (coplots)
+
+```{r}
+library(NHANES)
+library(tidyverse)
+
+new<-NHANES |> 
+  filter(SurveyYr=="2011_12" & Gender=="female") |>
+  drop_na(TotChol,BMI,Diabetes)
+```
+
+# coplots
+
+## condition by factor(s)
+
+```{r}
+coplot(TotChol~BMI|Diabetes,data=new) #y~x condition by z
+```
+
+```{r}
+coplot(TotChol~BMI|Diabetes*PhysActive,data=new) # two condition factors
+```
+
+## add smoother to the panel
+```{r}
+coplot(TotChol~BMI|Diabetes,data=new,
+       columns = 2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.5,...) 
+         abline(lm(y ~ x), col="blue") } )
+```
+
+panel	a function(x, y, col, pch, ...), which gives the action to be carried out in each panel of the display. The default is points.
+
+```{r}
+coplot(TotChol~BMI|Diabetes*PhysActive,data=new,
+       columns = 2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.5,...)
+         abline(lm(y ~ x), col="blue") } )
+```
+
+
+```{r}
+coplot(TotChol~BMI|Education,data=new,
+       columns = 2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.5)
+         abline(lm(y ~ x), col="blue") } )
+
+```
+
+
+## condition by numeric variable(s)
+```{r}
+coplot(TotChol~BMI|Age, data=new, 
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+```
+
+
+```{r}
+coplot(TotChol~BMI|Age, data=new, columns=6,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } ) # control number of columns
+```
+
+
+```{r}
+coplot(TotChol~BMI|Age, data=new, columns=6,overlap=.1,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } ) # share 10% of data across adjacent groups
+```
+
+```{r}
+coplot(TotChol~BMI|Age, data=new, columns=6,overlap=.1,number=2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+```
+
+`number` divide the numeric data into two conditions.
+
+```{r}
+coplot(TotChol~BMI|Age, data=new,overlap=.1,number=2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+```
+
+```{r}
+coplot(TotChol~BMI|Age, data=new,overlap=.1,columns=6,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+```
+
+```{r}
+coplot(TotChol~BMI|Poverty, data=new, 
+       number=2, column=2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+```
+
+
+```{r}
+coplot(TotChol~BMI|Poverty*Age, data=new, 
+       number=c(2,3), columns=2, 
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+
+```
+`number=2` controls both numeric variables.
+## condition by numeric*categorical variables
+```{r}
+coplot(TotChol~BMI|Race1*Age, data=new, 
+       number=2, column=2,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.8)
+         abline(lm(y ~ x), col="blue") } )
+
+```
+
+
+# ggcoplot
+```{r}
+new<-NHANES |> 
+  filter(SurveyYr=="2011_12" & Gender=="female") |>
+  drop_na(TotChol,BMI,Poverty)
+library(ggcleveland)
+gg_coplot(new, x = BMI, y = TotChol, faceting = Poverty,
+          number_bins = 2, overlap = .2) 
+```
+
+`ggcoplot` provieds scatterplot and loess regression, so x and y must be numeric values.
+
+
+```{r}
+library(dplyr)
+library(NHANES)
+library(ggcleveland)
+library(ggplot2)
+
+new <- NHANES %>% 
+  filter(SurveyYr == "2011_12", Gender == "female") %>%
+  tidyr::drop_na(TotChol, BMI, Poverty)
+```
+
+
+
+
+##turn the default "loess" smoother off
+
+```{r}
+gg_coplot(new, x = BMI, y = TotChol, faceting = Poverty,
+          number_bins = 2, overlap = .2,loess=F)
+```
+
+## make a new function to get linear smoother
+```{r}
+source("linear.ggcoplot.R")
+gg_coplot2(new, x = BMI, y = TotChol, faceting = Poverty,
+          number_bins = 2, overlap = .2,smoother = "lm")
+```
+
+
+# correlation matrices and correlograms
+```{r}
+M<-NHANES |>
+  filter(SurveyYr=="2011_12" & Gender=="female") |>
+  drop_na(Pulse,BPSysAve,TotChol,UrineVol1) |>
+  select("Pulse","BPSysAve","TotChol","UrineVol1")
+```
+
+
+## baseR
+```{r}
+mat <- cor(M,method=c("s"))
+round(mat, 2)
+```
+
+Note that cor function is not tidy friendly
+
+## correlation matrix
+```{r}
+library("PerformanceAnalytics")
+chart.Correlation(M, histogram=T)
+```
+
+## visualize correlation matrix w/tidy
+```{r}
+library(corrplot)
+library(tidyverse)
+
+M<-NHANES |>
+  filter(SurveyYr=="2011_12") |>
+  drop_na(Pulse,BPSysAve,TotChol,UrineVol1) |>
+  select("Pulse","BPSysAve","TotChol","UrineVol1") |>
+  cor(method="s")
+M
+```
+`corrplot` is a tidy friendly function that visualizes correlation matrix in the package `corrplot`.
+```{r}
+corrplot(M, method="number")
+corrplot(M,method = "pie")
+corrplot(M,method = "circle")
+corrplot(M,method = "square")
+corrplot(M,method = "ellipse")
+corrplot(M,method = "shade")
+corrplot(M,method = "color")
+```
+## ggplot visualization of correlation plots
+```{r}
+library(ggcorrplot)
+
+ggcorrplot(M)
+```
+
+
+# exercises
+
+1. Generate smoothed scatterplots of the Temp (x) and Ozone relationship, conditioned on Wind. What do they show? Do slopes appear to differ? Intercepts? Generate correlation coefficients (Pearson and either Spearman or Kendall, as a robust alternative) to verify and establish some precision to the changing relationships.
+
+```{r}
+M<-airquality|>
+  drop_na(Temp)|>drop_na(Ozone)|>drop_na(Wind)|>
+  select(Temp,Ozone,Wind)
+coplot(Ozone~Temp|Wind,data=M,
+       number = 3,overlap = .1,columns = 3,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.5,...) 
+         abline(lm(y ~ x), col="blue") } ) #y~x condition by z
+```
+```{r}
+gv<-co.intervals(M$Wind,number = 3,overlap = .1)
+cor(M|>filter(Wind<=8.05)|>select(Ozone,Temp),method=c("s"))
+cor(M|>filter(Wind<=11.55,Wind>=7.95)|>select(Ozone,Temp),method=c("s"))
+cor(M|>filter(Wind>=10.85)|>select(Ozone,Temp),method=c("s"))
+```
+
+2. Do the same analysis with solar radiation as the conditioner. Findings? What if you condition on both wind and solar radiation? does anything new emerge?
+
+```{r}
+M<-airquality|>
+  drop_na(Temp)|>drop_na(Ozone)|>drop_na(Wind)|>drop_na(Solar.R)|>
+  select(Temp,Ozone,Wind,Solar.R)
+coplot(Ozone~Temp|Wind*Solar.R,data=M,
+       number = 3,overlap = .1,columns = 3,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.5,...) 
+         abline(lm(y ~ x), col="blue") } ) #y~x condition by z
+```
+
+
+3. Look at the temp/ozone relationship conditioned on month. Notice that month is coded as a numeric variable, but is essentially categorical. Either mutate/recode into a new factor variable or pass the variable to the coplot function inside the as.factor() function. Generate correlation coefficients by month too. What pattern seems to be in the data?
+
+
+```{r}
+M<-airquality|>
+  drop_na(Temp)|>drop_na(Ozone)|>drop_na(Wind)|>drop_na(Month)|>
+  select(Temp,Ozone,Wind,Month)|>
+  mutate(Month=as.factor(Month))
+
+coplot(Ozone~Temp|Month*Wind,data=M,
+      number = 3,
+       panel=function(x,y,...) {
+         panel.smooth(x,y,span=.5,...) 
+         abline(lm(y ~ x), col="blue") } ) #y~x condition by z
+```
+
+# some go-beyonds:
+
+1. explore functions in the corrr package for formatting a correlation matrix.
+
+```{r}
+library(corrr)
+M<-NHANES |> filter(SurveyYr=="2011_12" & Gender=="female") |> drop_na(Pulse,BPSysAve,TotChol,UrineVol1) |> select("Pulse","BPSysAve","TotChol","UrineVol1")
+correlate(M)
+correlate(M) |> fashion(decimals=2)
+```
+
+```{r}
+library(corrr)
+M<-NHANES |> filter(SurveyYr=="2011_12" & Gender=="female") |> drop_na(Pulse,BPSysAve,TotChol,UrineVol1) |> select("Pulse","BPSysAve","TotChol","UrineVol1")
+shave(correlate(M))
+shave(correlate(M),upper=F)
+```
+```{r}
+rplot(correlate(M), shape = 20, colors = c("grey", "purple"), legend = TRUE)
+```
+
+```{r}
+new <- NHANES |> filter(SurveyYr=="2011_12" & MaritalStatus=="Married" & Age>20 & Age<65 & Race1=="Black") 
+new |>
+
+  ggplot(aes(x = Age, y = BPSysAve)) +
+
+geom_point(aes(color=Gender)) + geom_smooth(aes(colour = "OLS (lm)"),
+
+              method = "lm", se = FALSE) +
+
+geom_smooth(aes(colour = "LOESS (span = 0.6)"),
+
+              method = "loess", span = .6, se = FALSE) +
+
+labs(colour="Smoother")
+```
+
+
+```{r}
+library(ggnewscale)
+
+new |>
+
+  ggplot(aes(x = Age, y = BPSysAve)) +
+
+geom_point(aes(color=Gender)) +
+
+ggnewscale::new_scale_colour() +
+
+geom_smooth(aes(color = "OLS (lm)"),
+
+              method = "lm", se = FALSE) +
+
+geom_smooth(aes(color = "LOESS (span = 0.6)"),
+
+              method = "loess", span = .6, se = FALSE) +
+
+scale_colour_manual("Smoother",values = c("green", "purple"))
+
+
+```
+
+2. The method="number" version of a corrplot (using either corrplot or cor_plot function) produces a plot whose numbers are hard to read. Is there a way to change colors so that those values are readable?
+
+```{r}
+library(corrplot)
+library(tidyverse)
+M<-NHANES |>
+  filter(SurveyYr=="2011_12") |>
+  drop_na(Pulse,BPSysAve,TotChol,UrineVol1) |>
+  select("Pulse","BPSysAve","TotChol","UrineVol1") |>
+  cor(method="s")
+corrplot(M, method="number",bg="lightsalmon")
+```
+```{r}
+corrplot(M, method = "color", addCoef.col="red", order = "AOE")
+```

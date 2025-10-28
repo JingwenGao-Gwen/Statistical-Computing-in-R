@@ -1,0 +1,278 @@
+---
+title: "Exercise10"
+author: "Jingwen GAO"
+date: "2025-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=F,message=F,tidy=T)
+```
+
+# EDA with categorical variables
+```{r}
+library(NHANES)
+library(tidyverse)
+library(janitor)
+```
+
+## frequency tables with tabyl
+
+### basic table
+```{r}
+tab <- NHANES |>
+  filter(SurveyYr=="2011_12" & Age > 18) |>
+  tabyl(Education,show_na = T) 
+tab
+```
+
+```{r}
+# two way table
+tabb<- NHANES |>
+  filter(SurveyYr=="2011_12" & Age > 18) |>
+  tabyl(Education,Gender,show_na = T) 
+tabb
+```
+
+```{r}
+table(NHANES$Gender)
+prop.table(table(NHANES$Gender))
+
+```
+
+
+### adorned
+
+```{r}
+library(knitr)
+tab |> 
+  adorn_pct_formatting(digits = 1) |> 
+  kable() #fancy display
+```
+
+
+### further enhancements with adorn and kable
+
+```{r}
+
+library(kableExtra)
+
+tab<-NHANES |>  #adorn makes the table more readable
+  
+  filter(SurveyYr=="2011_12" & Age > 18) |>
+  
+  tabyl(Education, Gender) %>%
+  
+  adorn_totals(c("row", "col")) %>% # get row sum and col sum
+  
+  adorn_percentages("row") %>% #conditional distribution
+  
+  adorn_pct_formatting(rounding = "half up", digits = 0) %>%
+  
+  adorn_ns() %>% #add real counts
+  
+  adorn_title("combined") #head in the corner
+
+tab %>%
+  
+  kbl() %>%
+  
+  kable_styling()
+```
+
+
+## recoding categorical variables
+```{r}
+dat <- NHANES |>
+  filter(SurveyYr=="2011_12" & Age > 18)
+library(dplyr)
+table(dat$MaritalStatus)
+dat$marital2=dplyr::recode(dat$MaritalStatus, 
+                           "Divorced"="divorced/separated",
+                           "Separated"="divorced/separated",
+                           "LivePartner"="married/cohabiting",
+                           "Married"="married/cohabiting",
+                           "NeverMarried"="single",
+                           "Widowed"="widowed")
+table(dat$marital2)
+```
+
+## mosaic plot
+```{r}
+new<- NHANES |>
+  filter(SurveyYr=="2011_12" & Age > 64) |> 
+  select(Education,Gender)
+```
+
+
+### baseR
+```{r}
+mosaicplot(table(new$Gender, new$Education))
+mosaicplot(table(new$Gender, new$Education),las=1,color=1:5) #conditional distribution
+```
+Add labels
+```{r}
+labels2mosaicplot = \(tab, l, pos=1) {
+  # v0
+  stopifnot(inherits(tab, 'table'))
+  u = colSums(tab) / sum(tab)
+  x = cumsum(u) - u/2
+  p = prop.table(tab, 2)
+  y = 1 - (apply(p, 2, cumsum) - p/2)
+  text(x, t(y), l, pos=pos)
+}
+library(palmerpenguins)
+p = with(new, table(Education,Gender ))
+l[] = sprintf('%.1f%%', l <- 100 * proportions(p, 1))
+
+mosaicplot(p, main='Mosaic Plot')
+labels2mosaicplot(t(p), l)
+```
+
+### ggplot
+```{r}
+library(ggmosaic)
+ggplot(data=new) +
+  geom_mosaic(aes(x=product(Education, Gender), fill=Education))
+```
+```{r}
+ggplot(data=NHANES|>filter(!is.na(Gender)&!is.na(Education)&!is.na(PhysActive))) +
+  geom_mosaic(aes(x=product(Education, Gender), fill=Education)) + 
+  facet_grid(~PhysActive)
+```
+### vcd pkg
+```{r}
+library(vcd)
+vcd::mosaic( ~ Gender + Education, data = new,highlighting = "Gender")
+```
+`vcd:mosaic` makes you being able to transpose the conditional distribution. `highlighting= interest variable`.
+
+```{r}
+vcd::mosaic(~Gender+Education,data=new,highlighting="Education")
+
+```
+
+proportions on plot
+
+```{r}
+tab<-table(new$Gender,new$Education)
+names(dimnames(tab)) = c("Gender","Education")
+labs <- round(prop.table(tab,margin=1), 2)
+vcd::mosaic(tab,pop = F)
+labeling_cells(text = labs, margin = 0)(tab)
+```
+
+```{r}
+tab<-table(new$Education,new$Gender)
+names(dimnames(tab)) = c("Education","Gender")
+labs <- round(prop.table(tab,margin=1), 2)
+vcd::mosaic(tab,pop = FALSE)
+labeling_cells(text = labs, margin = 0)(tab)
+```
+
+## barplots
+
+### univariate
+```{r}
+ggplot(mutate(new, education = fct_infreq(Education))) + geom_bar(aes(x = education))
+```
+###bivariate
+```{r}
+
+ggplot(mutate(new, education = fct_infreq(Education))) + 
+  geom_bar(aes(x = education, fill = Gender),position = "fill")
+```
+
+```{r}
+library(palmerpenguins)
+library(dplyr)
+data("penguins")
+
+penguins <- penguins |>
+
+  drop_na() |>
+
+  dplyr::select(bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, species)
+
+library(ggplot2)
+
+library(GGally)
+
+ggpairs(penguins,
+
+        columns = 1:4,
+
+        aes(color=species, alpha=0.06))
+```
+
+```{r}
+custom_scatter <- function(data, mapping, ...) {
+
+  ggplot(data=data, mapping=mapping) +
+
+    geom_point(alpha=0.3) +
+
+    geom_smooth(method="lm", se=FALSE, ...)
+
+}
+
+ggpairs(
+
+  penguins,
+
+  columns = 1:4,
+
+  aes(color = species),
+
+  lower = list(continuous=custom_scatter)
+
+)
+```
+
+```{r}
+library(tidyverse)
+
+lat <- seq(20, 50, length.out = 200)
+lon <- seq(-130, -65, length.out = 300)
+
+grid <- expand_grid(lat = lat, lon = lon) |>
+  mutate(
+    base = 32 - 0.5*(lat - 20),                 
+    zonal = 0.12*(lon + 100),                   
+    heat_dome  = 8  * exp(-((lat-35)^2/(2*4^2)  + (lon+100)^2/(2*6^2))),
+    cool_trough= -6 * exp(-((lat-42)^2/(2*3^2)  + (lon+120)^2/(2*5^2))),
+    noise = rnorm(n(), 0, 0.4),
+    temp = base + zonal + heat_dome + cool_trough + noise
+  )
+
+
+ggplot(grid, aes(x = lon, y = lat, fill = temp)) +
+  geom_raster(interpolate = FALSE) +          
+  scale_fill_gradientn(
+    colours = c("#2c7bb6","#abd9e9","#ffffbf","#fdae61","#d7191c"),
+    name = "Temp (C)"
+  ) +
+  coord_fixed(1.3) +
+  labs(title = "Synthetic Weather Heatmap:Surface Temperature",
+       x = "Longitude", y = "Latitude")
+
+```
+
+```{r}
+library(tidyverse)
+
+data("airquality")
+
+airquality |>
+  mutate(
+    Month = factor(Month, levels = 5:9, labels = c("May","Jun","Jul","Aug","Sep"))
+  ) |>
+  ggplot(aes(x = Day, y = Month, fill = Temp)) +
+  geom_tile(color = "white") +
+  scale_fill_gradientn(colours = c("#2c7bb6","#abd9e9","#ffffbf","#fdae61","#d7191c"),
+                       name = "Temp (F)") +
+  scale_x_continuous(breaks = seq(1,31,5)) +
+  labs(title = "NYC Daily Temperature Heatmap (airquality, 1973)",
+       x = "Day", y = "Month")
+```
+

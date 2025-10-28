@@ -1,0 +1,333 @@
+---
+title: "Exercise2"
+author: "Jingwen GAO"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy = T,warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(scales)
+library(tidyverse)
+library(palmerpenguins)
+```
+
+# multivariate summary
+
+## ANOVA model data (categ X/numeric Y by categ Z)
+
+```{r}
+penguins$specbysex <- interaction(penguins$species, penguins$sex,lex.order = TRUE)
+ggplot(aes(y=body_mass_g, x=specbysex, fill=species), data = penguins) + 
+  geom_boxplot() 
+```
+
+Notice that we'd better rotate the x labels so that they don't overlap.
+
+```{r}
+penguins$specbysex <- interaction(penguins$species, penguins$sex,lex.order = TRUE)
+ggplot(aes(y=body_mass_g, x=specbysex, fill=species), data = penguins) + 
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle=90))
+```
+
+## proportions model (categ X/categ Y by categ Z)
+
+```{r}
+ggplot(penguins, aes(fill=species,x=island)) + 
+  geom_bar(position="dodge") +
+  scale_y_continuous(labels=percent_format()) +
+  facet_wrap(~sex)
+```
+
+Now introduce ways to deal with `NA`s.
+
+# deal with NAs
+
+## using subset
+
+```{r}
+ggplot(data=subset(penguins,!is.na(sex)),aes(fill=species,x=island))+
+  geom_bar(position = "dodge")+
+  scale_y_continuous(labels=percent_format())+
+  facet_wrap(~sex)
+```
+
+## using `dplyr`
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+penguins |>
+  drop_na(sex) %>%
+  ggplot(aes(fill = species,x=island))+
+  geom_bar(position="dodge")+
+  scale_y_continuous(labels = percent_format())+
+  facet_wrap(~sex)
+```
+
+`|>`is a symbol to pass the database into some sort of function to deal with it.
+
+# regression model data (numeric X/numeric Y by categ Z)
+
+## on same plot
+
+```{r}
+ggplot(data=penguins,
+       mapping=aes(x=flipper_length_mm, y=body_mass_g, color=sex)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F)
+```
+
+```{r}
+ggplot(data=penguins,
+       mapping=aes(x=flipper_length_mm, y=body_mass_g, color=sex)) +
+  geom_point() +
+  geom_smooth(method="loess",se=F)
+```
+
+## panelled plots
+
+```{r}
+ggplot(penguins,aes(x=flipper_length_mm, y=body_mass_g)) +
+  geom_point() +
+  geom_smooth(method="lm",se=F) +
+  facet_wrap(~sex)
+```
+
+# mosaic plots
+
+A mosaic plot is used to visualize multiway contingency tables (two or more categorical variables). Each small rectangle represents a combination of categories, with its area proportional to that cell’s frequency or proportion.
+
+By sequentially “splitting” the display—first by variable A to set the widths, then within each section by variable B to set the heights, then by C, and so on—you can quickly see conditional proportions and associations between variables.
+
+```{r}
+library(tidyr)
+newpen <- penguins %>% drop_na()
+library(ggmosaic)
+```
+
+## univariate
+
+```{r}
+ggplot(data=penguins)+
+  geom_mosaic(aes(x=product(island),fill=island))
+prop.table(table(penguins$island))
+```
+
+## bivariate
+
+```{r}
+ggplot(data=penguins)+
+  geom_mosaic(aes(x=product(sex,island),fill=island))
+
+pen<-penguins%>%drop_na(sex)
+prop.table(table(pen$island,pen$sex),margin=1)
+
+```
+
+## Multivariate
+
+```{r}
+ggplot(data = penguins) +
+  geom_mosaic(aes(x=product(species,island), fill=island, conds=product(sex)))+
+  facet_grid(~sex)+
+  theme(axis.text.x = element_text(angle=90))
+
+ggplot(data = penguins) +
+  geom_mosaic(aes(x=product(species), fill=island, divider="vspine"))+
+  facet_grid(~sex)
+```
+
+`conds` means conditional on.
+
+`divider="vspine"` makes the graph looks like dividing the verticle strips.
+
+# Practice
+
+Use the NHANES (National Health & Nutrition Examination Survey) data, which is in the NHANES package. Install and library.
+
+```{r}
+library(NHANES)
+```
+
+Create a dataframe of the 2009-10 survey data with the following line: Note that filter() is a dplyr function.
+
+```{r}
+dat <- NHANES |> filter(SurveyYr=="2009_10")
+```
+
+1.  Generate boxplots of weight by Gender and SmokeNow. (You'll want to remove the NAs from the Gender variable first.) What do the plots show about the relationship?
+
+```{r}
+NHANES$GenSmok<-interaction(NHANES$Gender,NHANES$SmokeNow)
+NHANES|>
+  drop_na(Gender)%>%
+  ggplot(aes(y=Weight,x=GenSmok))+
+  geom_boxplot()
+```
+
+2.  Generate barplots of the proportion/percentages of people by smoking status (SmokeNow) and marijuana status (Marijuana) by Gender. What do the plots show?
+
+```{r}
+NHANES$SmkMrjn<-interaction(NHANES$SmokeNow,NHANES$Marijuana)
+NHANES|>
+  drop_na(SmkMrjn)%>%
+  drop_na(Gender)%>%
+  drop_na(SmokeNow)%>%
+  drop_na(Marijuana)%>%
+  ggplot(aes(x=Gender,fill=SmkMrjn))+
+  geom_bar(position="fill")+
+  scale_y_continuous(labels = percent_format())
+  
+```
+
+
+3.  Generate a smoothed scatterplot(s) of the relationship between BMI (x) and total cholesterol by gender. What do the plots show? How about the relationship between BMI and days of reported bad mental health, by gender? By another factor instead of gender?
+
+```{r}
+NHANES|>
+  drop_na(BMI)%>%
+  drop_na(TotChol)%>%
+  drop_na(Gender)%>%
+  ggplot(aes(x=BMI,y=TotChol,group = Gender))+
+  geom_point(alpha=0.3)+
+  geom_smooth(aes(colour = Gender),se=F)
+
+NHANES|>
+  drop_na(BMI)%>%
+  drop_na(DaysMentHlthBad)%>%
+  drop_na(Gender)%>%
+  ggplot(aes(x=BMI,y=DaysMentHlthBad,group = Gender))+
+  geom_point(alpha=0.3)+
+  geom_smooth(aes(colour = Gender),se=F)
+
+NHANES|>
+  drop_na(BMI)%>%
+  drop_na(DaysMentHlthBad)%>%
+  drop_na(Marijuana)%>%
+  ggplot(aes(x=BMI,y=DaysMentHlthBad))+
+  geom_point(alpha=0.3)+
+  geom_smooth(aes(colour = Marijuana),se=F)
+```
+
+
+4.  Generate boxplots of days of reported bad mental health by Gender and Sleep Trouble. What do they show?
+
+```{r}
+NHANES|>
+  drop_na(SleepTrouble)%>%
+  drop_na(DaysMentHlthBad)%>%
+  drop_na(Gender)%>%
+  ggplot(aes(x=interaction(SleepTrouble,Gender,lex.order = T)))+
+  geom_boxplot(aes(y=DaysMentHlthBad))
+```
+
+
+5.  Generate barplots of the relationship between sleep trouble and depressed by gender. What do they show?
+
+```{r}
+NHANES|>
+  filter(!is.na(SleepTrouble),!is.na(Depressed),!is.na(Gender))%>%
+  ggplot(aes(x=Gender,fill=interaction(SleepTrouble,Depressed,lex.order = T)))+
+  geom_bar(position = "fill")
+```
+
+# Go beyonds
+
+1.  Figure out how to turn boxplots so that they're horizontal. These can be easier to read because the outcome variable is on x rather than y.
+
+`coord_flip`
+
+```{r}
+NHANES|>
+  drop_na(SleepTrouble)%>%
+  drop_na(DaysMentHlthBad)%>%
+  drop_na(Gender)%>%
+  ggplot(aes(x=interaction(SleepTrouble,Gender,lex.order = T)))+
+  geom_boxplot(aes(y=DaysMentHlthBad))+
+  coord_flip()
+```
+
+2.  Figure out how to plot the mean on a boxplot. Explain what this adds to the plot.
+
+```{r}
+NHANES|>
+  drop_na(SleepTrouble)%>%
+  drop_na(DaysMentHlthBad)%>%
+  drop_na(Gender)%>%
+  ggplot(aes(x=interaction(SleepTrouble,Gender,lex.order = T)))+
+  geom_boxplot(aes(y=DaysMentHlthBad))+
+  stat_summary(aes(y=DaysMentHlthBad),fun="mean", geom = "point", shape = 16, size = 3, color = "darkred")
+```
+
+
+4.What is a mirror histogram? How do you produce one in R and does it add value to other displays of histograms by group?
+
+```{r}
+dat <- NHANES |>
+  filter(!is.na(BMI), !is.na(Gender)) |>
+  filter(Gender %in% c("male","female"))
+
+ggplot() +
+  # Group A (male) upward
+  geom_histogram(
+    data = filter(dat, Gender == "male"),
+    aes(x = BMI, y = ..density..),
+    binwidth = 1, fill = "#1f77b4", alpha = 0.8
+  ) +
+  # Group B (female) mirrored downward
+  geom_histogram(
+    data = filter(dat, Gender == "female"),
+    aes(x = BMI, y = -after_stat(density)),
+    binwidth = 1, fill = "#ff7f0e", alpha = 0.8
+  ) +
+  geom_hline(yintercept = 0, linewidth = 0.5) + # To emphasize the boundary
+  scale_y_continuous("Density (mirrored; below 0 = female)",
+                     labels = function(x) abs(x)) +
+  labs(x = "BMI", title = "Mirror histogram: BMI by Gender") 
+  
+```
+
+
+5.Figure out how to put frequencies or proportions or percentages on mosaic plot boxes using ggmosaic.
+
+```{r}
+p1<-ggplot(data=penguins)+
+  geom_mosaic(aes(x=product(sex,island),fill=island))
+pld<-ggplot_build(p1)$data%>%as.data.frame()%>%filter(.wt>0)
+pld
+```
+
+`ggplot_build` is a function that can extract the information from the plot.
+
+Then `p1d$.n` shows the frequency of each rectangle, and we can use `geom_label()` to display these frequencies on the graph. 
+
+```{r}
+p1+geom_label(data=pld,aes(x=(xmin+xmax)/2,y=(ymin+ymax)/2,label = .n))
+```
+
+
+For the percentage, one can manually create a column in the `ggplot_build`.
+
+```{r}
+pld<-pld%>%mutate(prop=(.n/sum(.n)))
+
+p1+ geom_label(data = pld, 
+aes(x = (xmin + xmax)/2, y = (ymin + ymax)/2, label =percent(prop)))
+```
+
+`mutate()` creates new columns that are functions of existing variables. It can also modify (if the name is the same as an existing column) and delete columns (by setting their value to NULL).
+
+```{r}
+pld<-pld%>%mutate(prop=(.n/sum(pld$.n)))
+
+p1+ geom_label(data = pld, 
+aes(x = (xmin + xmax)/2, y = (ymin + ymax)/2, label =percent(prop)))
+```
+
+
