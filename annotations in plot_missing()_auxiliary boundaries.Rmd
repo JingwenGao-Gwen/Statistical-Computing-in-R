@@ -1,0 +1,84 @@
+---
+title: "Gobeyond"
+author: "Jingwen GAO"
+date: "2025-10-31"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The default `plot_missing()` function inspires me to add an auxiliary line on the plot so that we can view how far the missingness is from our grouping boundaries. This is easy to realize since the `plot_missing()` function is based on `ggplot2` . I use dataset `starwars` and manually set one variable to 0 because I want to see what it will be like as a removed variable.       
+
+```{r}
+library(dplyr)
+library(ggplot2)
+data(starwars)
+df <- starwars
+df$species <- NA
+
+library(DataExplorer)
+plot_missing(df)
+```
+I did some modification to the parameters we use in the plot_missing function just to better visualize the information. 
+
+```{r}
+library(DataExplorer)
+library(ggplot2)
+
+data(starwars)
+df <- starwars
+df$species <- NA
+
+# Group boundaries defined by plot_missing
+grp  <- list(Good = 0.05, OK = 0.4, Bad = 0.8, Remove = 1)
+gcol <- list(Good = "#1B9E77", OK = "#E6AB02", Bad = "#D95F02", Remove = "#E41A1C")
+
+p <- plot_missing(
+  df,
+  group        = grp,
+  group_color  = gcol,
+  missing_only = FALSE,
+  geom_label_args = list(size = 4, label.size = 0,fill=NA), 
+  ggtheme      = theme_gray(),
+  theme_config = list(legend.position = "bottom")
+)
+
+cuts <- unlist(grp)           # c(0.05, 0.4, 0.8, 1.0)
+n    <- nrow(df)
+p +
+  geom_hline(yintercept = cuts * n, linetype = "dashed", linewidth = 0.4) +
+  annotate("text",
+           y = cuts * n+1, x = ncol(df), 
+           label = paste0(round(cuts * 100), "%"),
+           angle = 90, vjust = -0.6, size = 3)
+```
+If somebody want to try out in the airquality dataset, I have a reference code for you.             
+
+```{r}
+p <- plot_missing(
+  airquality,
+  group        = grp,
+  group_color  = gcol,
+  missing_only = FALSE,
+  geom_label_args = list(size = 4, label.size = 0,fill=NA), 
+  ggtheme      = theme_gray(),
+  theme_config = list(legend.position = "bottom")
+)
+
+cuts <- unlist(grp)           # c(0.05, 0.4, 0.8, 1.0)
+n    <- nrow(airquality)
+p +
+  geom_hline(yintercept = cuts * n, linetype = "dashed", linewidth = 0.4) +
+  annotate("text",
+           y = cuts * n+1, x = ncol(airquality), 
+           label = paste0(round(cuts * 100), "%"),
+           angle = 90, vjust = -0.6, size = 3)
+```
+
+Resource:
+
+https://stackoverflow.com/questions/55941265/how-to-change-colors-and-band-labels-in-data-explorers-plot-missing-function 
+
+https://search.r-project.org/CRAN/refmans/DataExplorer/html/plot_missing.html 
